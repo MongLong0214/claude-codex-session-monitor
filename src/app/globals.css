@@ -1,3 +1,7 @@
+@import "@astryxdesign/core/reset.css";
+@import "@astryxdesign/core/astryx.css";
+@import "@astryxdesign/theme-neutral/theme.css";
+
 html,
 body {
   height: 100%;
@@ -5,4 +9,5 @@ body {
 
 body {
   margin: 0;
+  font-variant-numeric: tabular-nums;
 }

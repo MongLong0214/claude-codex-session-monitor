@@ -9,8 +9,9 @@
   "type": "module",
   "packageManager": "pnpm@11.11.0",
   "scripts": {
-    "dev": "next dev --turbopack",
+    "dev": "next dev --turbopack -H 127.0.0.1",
     "build": "next build --turbopack",
+    "start": "next start -H 127.0.0.1",
     "start:legacy": "node server.mjs",
     "test": "node --test --test-concurrency=1",
     "test:unit": "node --test test/session-data.test.mjs",

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_DASHBOARD_SETTINGS, DEFAULT_VISIBLE_COLUMNS, type DashboardSettings } from "@/domain/settings";
+import {
+  DEFAULT_DASHBOARD_SETTINGS,
+  DEFAULT_VISIBLE_COLUMNS,
+  parseDashboardSettings,
+  type DashboardSettings,
+} from "@/domain/settings";
 import {
   tableStateFromSettings,
   visibilityStateFromVisibleColumns,
@@ -53,12 +58,12 @@ describe("tableStateFromSettings", () => {
     expect(state.columnVisibility.model).toBe(false);
   });
 
-  it("drops status filter entries that are not valid status kinds", () => {
-    const settings: DashboardSettings = {
+  it("maps a corruption-reset status filter to the empty default", () => {
+    const settings = parseDashboardSettings({
       ...DEFAULT_DASHBOARD_SETTINGS,
       statusFilter: ["failed", "not-a-real-kind"],
-    };
+    });
 
-    expect(tableStateFromSettings(settings).statusKinds).toEqual(["failed"]);
+    expect(tableStateFromSettings(settings).statusKinds).toEqual([]);
   });
 });

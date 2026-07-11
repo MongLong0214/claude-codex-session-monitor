@@ -13,12 +13,12 @@ Running several Codex/Claude Code sessions across several projects at once makes
 - **Multi-source** — Codex CLI and Claude Code sessions in one unified, virtualized table, each row tagged with its real source.
 - **Real-time** — initial state over HTTP, incremental updates over Server-Sent Events, with reconnect/backoff, sequence-gap detection, and automatic resync on reconnect. Not client-side polling.
 - **Built for scale** — TanStack Table + Virtual, sticky core columns, resizable columns, compact/comfortable density, roving-tabindex keyboard navigation, bulk selection and bulk actions. Row updates are reference-isolated: one agent changing never re-renders another agent's row.
-- **Detail panel** — Overview / Logs / Changes tabs per agent, resizable 380–520px, with a real (paginated, tail-bounded) log view backed by each source's own transcript format.
+- **Detail panel** — Overview / Logs / Changes tabs per agent, resizable 380–520px, with a real, tail-bounded log view backed by each source's own transcript format.
 - **Real cost, only where it's real** — Claude Code sessions carry real per-message token usage, priced against Anthropic's actual published rates. Codex sessions show `—` for cost, because Codex's local state genuinely has no pricing data. Nothing here is a guessed number, and neither is the progress column: there's no percent-complete signal from either tool, so it's an honest indeterminate indicator, never a fabricated percentage.
-- **Honest action set** — Stop, Pause/Resume (OS-level `SIGTERM`/`SIGSTOP`/`SIGCONT`), Open Terminal, View Diff, Create/Open PR are real. Retry, Approve, and Reject are disabled with the actual reason shown: this tool observes externally-launched sessions read-only and has no stdin/PTY channel into them.
+- **Honest action set** — Stop, Pause/Resume (OS-level `SIGTERM`/`SIGSTOP`/`SIGCONT`), Open Terminal, View Working-Tree Changes (a point-in-time, read-only `git status --short` snapshot), and Create/Open PR are real. Retry, Approve, and Reject are disabled with the actual reason shown: this tool observes externally-launched sessions read-only and has no stdin/PTY channel into them.
 - **Command palette** (`Cmd/Ctrl+K`) — search agents, projects, and branches; open a detail panel; act on whichever agent's panel is open; change theme or density. `/` focuses the table search directly.
 - **Persisted, per-device UI state** — theme, density, column layout, filters, and sort survive a reload via localStorage, validated and versioned so a corrupted or stale value never breaks the dashboard.
-- **Local-only security** — binds `127.0.0.1` only, validates `Host`/`Origin` on every request (DNS-rebinding aware), every child process call uses `execFile` with an argument array (never a shell string), every filesystem path is canonicalized and checked against the tool's own live snapshot before use.
+- **Local-only security** — binds `127.0.0.1` only, validates the exact canonical local `Host`/`Origin` on every API request, and uses `execFile` with argument arrays (never shell strings). Claude transcript paths are canonicalized within configured roots; log paths are snapshot-owned, and action working directories are snapshot-owned and revalidated before use.
 - **Accessible** — semantic HTML throughout, no incomplete ARIA grid, verified with `@axe-core/playwright` against the loaded dashboard and the open detail panel (zero violations), real keyboard-navigation and light/dark contrast checks.
 
 ## Getting started
@@ -84,9 +84,9 @@ src/
 This is a single-user local tool, not a multi-tenant service — there is deliberately no login, no accounts, no roles. Safety instead comes from:
 
 - Binding `127.0.0.1` only, never `0.0.0.0`
-- Rejecting requests whose `Host`/`Origin` don't resolve to loopback (DNS-rebinding aware)
+- Rejecting API requests whose `Host` is not a canonical local authority or whose present `Origin` is not that exact local origin
 - Never building a shell command from a string — always `execFile` with an argument array
-- Canonicalizing every filesystem path and checking it against the tool's own live snapshot before touching it
+- Canonicalizing Claude transcript paths within configured roots; accepting log paths only from the current snapshot; and revalidating snapshot-owned action working directories at use time
 - Every request body validated with Zod before it reaches any handler logic
 
 ## License

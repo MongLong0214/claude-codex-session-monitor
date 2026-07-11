@@ -1,13 +1,7 @@
 import type { ColumnSizingState, SortingState, VisibilityState } from "@tanstack/react-table";
-import { AgentStatusKindSchema, type AgentStatusKind } from "@/domain/agent/status";
+import type { AgentStatusKind } from "@/domain/agent/status";
 import type { DashboardSettings, RowDensity } from "@/domain/settings";
 import { agentTableColumns, getHideableColumnIds } from "./columns";
-
-const VALID_STATUS_KINDS = new Set<string>(AgentStatusKindSchema.options);
-
-function isAgentStatusKind(value: string): value is AgentStatusKind {
-  return VALID_STATUS_KINDS.has(value);
-}
 
 /**
  * The persisted slices of the table state, in the table's own runtime shape rather than the
@@ -42,9 +36,8 @@ export function visibleColumnsFromVisibilityState(columnVisibility: VisibilitySt
 }
 
 /**
- * Projects persisted DashboardSettings onto the table state's own shape for hydration. `sort` and
- * `columnWidths` already match TanStack's `SortingState`/`ColumnSizingState` verbatim, so only the
- * column-visibility translation and a defensive filter of unknown status kinds are needed.
+ * Projects persisted DashboardSettings onto the table state's own shape. `sort`, `columnWidths`,
+ * and the boundary-typed filters already match the table state, so only visibility is translated.
  */
 export function tableStateFromSettings(settings: DashboardSettings): PersistedTableState {
   return {
@@ -52,7 +45,7 @@ export function tableStateFromSettings(settings: DashboardSettings): PersistedTa
     sorting: settings.sort,
     columnVisibility: visibilityStateFromVisibleColumns(settings.visibleColumns),
     columnSizing: settings.columnWidths,
-    statusKinds: settings.statusFilter.filter(isAgentStatusKind),
+    statusKinds: settings.statusFilter,
     projectCwds: settings.projectFilter,
     branches: settings.branchFilter,
   };

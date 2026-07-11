@@ -1,7 +1,7 @@
 "use client";
 
 import { ToastViewport } from "@astryxdesign/core/Toast";
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { AgentId } from "@/domain/agent/agent";
 import type { DashboardSettings } from "@/domain/settings";
 import { DashboardCommandPalette } from "./command-palette/dashboard-command-palette";
@@ -31,9 +31,8 @@ export function DashboardWorkspace({
   isCommandPaletteOpen,
   onCommandPaletteOpenChange,
 }: DashboardWorkspaceProps) {
-  // Captured once: mounted only after settings hydrate, so this is the stored value, not the default.
-  const [initialTableState] = useState(() => tableStateFromSettings(settings));
-  const tableState = useAgentTableState({ initialState: initialTableState, onPersist: onUpdateSettings });
+  const persistedTableState = useMemo(() => tableStateFromSettings(settings), [settings]);
+  const tableState = useAgentTableState({ persistedState: persistedTableState, onPersist: onUpdateSettings });
 
   const [selectedAgentId, setSelectedAgentId] = useState<AgentId | null>(null);
 

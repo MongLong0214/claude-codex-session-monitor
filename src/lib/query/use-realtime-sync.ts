@@ -14,6 +14,8 @@ import { useDashboardSnapshot } from "./use-dashboard-snapshot";
  * dashboard would buffer a reconnect's resync burst indefinitely instead of draining it.
  */
 const FLUSH_WINDOW_MS = 32;
+const RECOVERY_RETRY_MS = 1_000;
+const MAX_RECOVERY_BACKLOG = 512;
 
 export interface RealtimeSyncState {
   status: ConnectionStatus;
@@ -28,9 +30,10 @@ export interface RealtimeSyncState {
  *
  * Cache coherence has two recovery paths, both landing on the snapshot endpoint as the authority:
  *   - reconnect: the resync burst is upserts only, so it cannot express agents deleted while we
- *     were disconnected. Refetch, then let the burst apply on top.
+ *     were disconnected. Discard pending events and refetch.
  *   - sequence gap: events were lost, so an unknown number of upserts/removals never arrived.
- *     Apply the event we did get (it is newer state) and refetch to reconcile the rest.
+ *     Discard pending events and refetch rather than replaying stale state over the authority.
+ * Events arriving during either refetch queue one more serialized authority pass.
  * Duplicates and out-of-order events are dropped outright — never merged.
  *
  * `transport` is captured once per mount rather than defaulted per render — a fresh
@@ -42,20 +45,24 @@ export function useRealtimeSync(transport?: RealtimeTransport): RealtimeSyncStat
   const [resolvedTransport] = useState<RealtimeTransport>(() => transport ?? new SseRealtimeTransport());
   const [sequencer] = useState(() => new EventSequencer());
 
-  // Reads `isSuccess` only: tracked-props gating means snapshot data churn never re-renders this hook.
-  const { isSuccess } = useDashboardSnapshot();
+  const { data } = useDashboardSnapshot();
+  const hasSnapshot = data !== undefined;
 
   const [status, setStatus] = useState<ConnectionStatus>("connecting");
   const [lastEventAt, setLastEventAt] = useState<string | null>(null);
 
   const bufferRef = useRef<RealtimeEvent[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const hasConnectedRef = useRef(false);
 
   useEffect(() => {
-    if (!isSuccess) {
+    if (!hasSnapshot) {
       return;
     }
+
+    let disposed = false;
+    let recoveryActive = false;
+    let recoveryQueued = false;
+    let recoveryRetryTimer: ReturnType<typeof setTimeout> | null = null;
 
     const flush = () => {
       flushTimerRef.current = null;
@@ -68,11 +75,6 @@ export function useRealtimeSync(transport?: RealtimeTransport): RealtimeSyncStat
       queryClient.setQueryData<DashboardSnapshot>(dashboardKeys.snapshot(), (prev) =>
         prev ? applyRealtimeEvents(prev, batch) : prev,
       );
-
-      const latest = batch[batch.length - 1];
-      if (latest) {
-        setLastEventAt(latest.timestamp);
-      }
     };
 
     const scheduleFlush = () => {
@@ -82,8 +84,61 @@ export function useRealtimeSync(transport?: RealtimeTransport): RealtimeSyncStat
       flushTimerRef.current = setTimeout(flush, FLUSH_WINDOW_MS);
     };
 
-    const resyncFromSnapshot = () => {
-      void queryClient.invalidateQueries({ queryKey: dashboardKeys.snapshot() });
+    function runRecovery(): void {
+      recoveryQueued = false;
+      void queryClient
+        .invalidateQueries({ queryKey: dashboardKeys.snapshot() }, { throwOnError: true })
+        .then(
+          () => {
+            if (disposed) {
+              return;
+            }
+            if (recoveryQueued) {
+              runRecovery();
+              return;
+            }
+            recoveryActive = false;
+            flush();
+          },
+          () => {
+            if (disposed) {
+              return;
+            }
+            recoveryRetryTimer = setTimeout(() => {
+              recoveryRetryTimer = null;
+              runRecovery();
+            }, RECOVERY_RETRY_MS);
+          },
+        );
+    }
+
+    function requestRecovery(queueNext = false): void {
+      if (recoveryActive) {
+        recoveryQueued = true;
+        return;
+      }
+      recoveryActive = true;
+      if (flushTimerRef.current !== null) {
+        clearTimeout(flushTimerRef.current);
+        flushTimerRef.current = null;
+      }
+      bufferRef.current = [];
+      runRecovery();
+      if (queueNext) {
+        recoveryQueued = true;
+      }
+    }
+
+    const bufferEvent = (event: RealtimeEvent) => {
+      if (bufferRef.current.length === MAX_RECOVERY_BACKLOG) {
+        requestRecovery(true);
+        return;
+      }
+      bufferRef.current.push(event);
+    };
+
+    const advanceLastEventAt = (timestamp: string) => {
+      setLastEventAt((current) => (current === null || Date.parse(timestamp) > Date.parse(current) ? timestamp : current));
     };
 
     const disconnect = resolvedTransport.connect({
@@ -95,18 +150,25 @@ export function useRealtimeSync(transport?: RealtimeTransport): RealtimeSyncStat
         }
         if (decision === "gap") {
           console.warn(`[realtime-sync] sequence gap: ${missing} event(s) lost, refetching snapshot.`);
-          resyncFromSnapshot();
+          requestRecovery(event.type !== "heartbeat");
         }
+
+        advanceLastEventAt(event.timestamp);
 
         // Heartbeats carry no cache payload; they only advance the liveness clock, and
         // buffering them would churn `revision` for nothing. They still participate in
         // sequencing above, so a gap observed on a heartbeat also triggers a resync.
         if (event.type === "heartbeat") {
-          setLastEventAt(event.timestamp);
           return;
         }
-        bufferRef.current.push(event);
-        scheduleFlush();
+        if (recoveryActive) {
+          requestRecovery();
+          return;
+        }
+        bufferEvent(event);
+        if (!recoveryActive) {
+          scheduleFlush();
+        }
       },
       onStatusChange: (next) => {
         setStatus(next);
@@ -115,26 +177,26 @@ export function useRealtimeSync(transport?: RealtimeTransport): RealtimeSyncStat
           // The server restarts sequences per connection; carrying the counter across would
           // classify the entire resync burst as stale and discard it.
           sequencer.reset();
-
-          if (hasConnectedRef.current) {
-            resyncFromSnapshot();
-          }
-          hasConnectedRef.current = true;
+          requestRecovery();
         }
       },
     });
 
     return () => {
+      disposed = true;
       disconnect();
       if (flushTimerRef.current !== null) {
         clearTimeout(flushTimerRef.current);
         flushTimerRef.current = null;
       }
+      if (recoveryRetryTimer !== null) {
+        clearTimeout(recoveryRetryTimer);
+        recoveryRetryTimer = null;
+      }
       bufferRef.current = [];
-      hasConnectedRef.current = false;
       sequencer.reset();
     };
-  }, [isSuccess, queryClient, resolvedTransport, sequencer]);
+  }, [hasSnapshot, queryClient, resolvedTransport, sequencer]);
 
   return { status, lastEventAt };
 }

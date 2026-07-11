@@ -21,7 +21,8 @@ function formatSse(event: RealtimeEvent): string {
  *
  * We deliberately keep no server-side event history. Instead, every connection opens with a full
  * resync burst (one agent_upserted per agent, one incident_upserted per incident, one
- * summary_updated), which makes reconnects self-healing without replaying missed events.
+ * projects_updated and one summary_updated), which makes reconnects self-healing without
+ * replaying missed events.
  * `sequence` is only monotonic within a single connection — that is all a client needs to detect a
  * gap, because there is no cross-connection history to reconcile.
  *
@@ -51,6 +52,7 @@ export async function GET(request: Request) {
 
       const agentFingerprints = new Map<string, string>();
       const incidentFingerprints = new Map<string, string>();
+      let projectsFingerprint: string | null = null;
       let summaryFingerprint: string | null = null;
 
       const send = (event: RealtimeEvent): void => {
@@ -119,6 +121,12 @@ export async function GET(request: Request) {
             incidentFingerprints.delete(id);
             send({ ...meta(), type: "incident_resolved", entityId: id, payload: {} });
           }
+        }
+
+        const nextProjectsFingerprint = JSON.stringify(snapshot.projects);
+        if (projectsFingerprint !== nextProjectsFingerprint) {
+          projectsFingerprint = nextProjectsFingerprint;
+          send({ ...meta(), type: "projects_updated", entityId: null, payload: snapshot.projects });
         }
 
         const nextSummaryFingerprint = JSON.stringify(snapshot.summary);

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { agentLogRepository, dashboardRepository } from "@/data-access/repositories";
+import { AgentIdSchema } from "@/domain/agent/agent";
 import { AgentLogQuerySchema } from "@/domain/agent/logs";
 import { guardLocalRequest } from "@/lib/security";
 
@@ -16,13 +17,17 @@ export async function GET(request: Request, context: { params: Promise<{ agentId
   const limitParam = new URL(request.url).searchParams.get("limit");
   const parsed = AgentLogQuerySchema.safeParse(limitParam === null ? {} : { limit: limitParam });
   if (!parsed.success) {
-    return NextResponse.json({ error: "limit 값이 올바르지 않습니다.", issues: parsed.error.issues }, { status: 400 });
+    return NextResponse.json({ error: "limit 값이 올바르지 않습니다." }, { status: 400 });
   }
 
   /** Registered-agent allowlist: only ids the repository currently observes may be read. */
-  const { agentId } = await context.params;
+  const params = AgentIdSchema.safeParse((await context.params).agentId);
+  if (!params.success) {
+    return NextResponse.json({ error: "에이전트 ID가 올바르지 않습니다." }, { status: 400 });
+  }
+  const agentId = params.data;
   const snapshot = await dashboardRepository.getSnapshot();
-  if (!snapshot.byId[agentId]) {
+  if (!Object.hasOwn(snapshot.byId, agentId)) {
     return NextResponse.json({ error: `알 수 없는 에이전트입니다: ${agentId}` }, { status: 404 });
   }
 

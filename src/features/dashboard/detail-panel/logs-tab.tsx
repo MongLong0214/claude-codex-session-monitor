@@ -9,7 +9,7 @@ import { Spinner } from "@astryxdesign/core/Spinner";
 import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { Timestamp } from "@astryxdesign/core/Timestamp";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AgentId } from "@/domain/agent/agent";
 import type { AgentLogLevel, AgentLogLine } from "@/domain/agent/logs";
 import { DEFAULT_AGENT_LOG_LIMIT } from "@/domain/agent/logs";
@@ -17,6 +17,9 @@ import { useAgentLogs } from "@/lib/query/use-agent-logs";
 import styles from "./logs-tab.module.css";
 
 type LevelFilter = "all" | AgentLogLevel;
+type CopyFeedback =
+  | { readonly scope: symbol; readonly kind: "copied" }
+  | { readonly scope: symbol; readonly kind: "error"; readonly message: string };
 
 /** Within this distance of the bottom the view counts as "following"; further up it is "reading". */
 const PINNED_THRESHOLD_PX = 24;
@@ -40,15 +43,21 @@ function toClipboardText(lines: readonly AgentLogLine[]): string {
  */
 export function LogsTab({ agentId }: { agentId: AgentId }) {
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
-  const [isCopied, setCopied] = useState(false);
+  const [copyFeedback, setCopyFeedback] = useState<CopyFeedback | null>(null);
 
   const { data, isLoading, isError, error, refetch, isFetching } = useAgentLogs(agentId, { isEnabled: true });
 
   const scrollRef = useRef<HTMLElement>(null);
   const isPinnedRef = useRef(true);
+  const copyAttemptRef = useRef(0);
+  const copyScope = useMemo(() => Symbol(agentId), [agentId]);
+  const copyScopeRef = useRef(copyScope);
 
   const lines = data?.lines ?? [];
   const visibleLines = levelFilter === "all" ? lines : lines.filter((line) => line.level === levelFilter);
+  const currentCopyFeedback = copyFeedback?.scope === copyScope ? copyFeedback : null;
+  const isCopied = currentCopyFeedback?.kind === "copied";
+  const copyError = currentCopyFeedback?.kind === "error" ? currentCopyFeedback.message : null;
 
   /** Follow new output only when the user is already at the bottom; never yank them out of history. */
   useEffect(() => {
@@ -59,13 +68,18 @@ export function LogsTab({ agentId }: { agentId: AgentId }) {
   }, [visibleLines]);
 
   useEffect(() => {
-    if (!isCopied) {
+    copyScopeRef.current = copyScope;
+    copyAttemptRef.current += 1;
+  }, [copyScope]);
+
+  useEffect(() => {
+    if (copyFeedback?.kind !== "copied") {
       return;
     }
 
-    const timer = window.setTimeout(() => setCopied(false), COPIED_FEEDBACK_MS);
+    const timer = window.setTimeout(() => setCopyFeedback(null), COPIED_FEEDBACK_MS);
     return () => window.clearTimeout(timer);
-  }, [isCopied]);
+  }, [copyFeedback]);
 
   const handleScroll = () => {
     const region = scrollRef.current;
@@ -75,8 +89,22 @@ export function LogsTab({ agentId }: { agentId: AgentId }) {
   };
 
   const handleCopy = async () => {
-    await navigator.clipboard.writeText(toClipboardText(visibleLines));
-    setCopied(true);
+    const attempt = ++copyAttemptRef.current;
+    setCopyFeedback(null);
+    try {
+      await navigator.clipboard.writeText(toClipboardText(visibleLines));
+      if (attempt === copyAttemptRef.current && copyScopeRef.current === copyScope) {
+        setCopyFeedback({ scope: copyScope, kind: "copied" });
+      }
+    } catch (error) {
+      if (attempt === copyAttemptRef.current && copyScopeRef.current === copyScope) {
+        setCopyFeedback({
+          scope: copyScope,
+          kind: "error",
+          message: error instanceof Error && error.message ? error.message : "알 수 없는 오류",
+        });
+      }
+    }
   };
 
   return (
@@ -120,6 +148,10 @@ export function LogsTab({ agentId }: { agentId: AgentId }) {
       <Text type="supporting" as="p">
         {UNREACHABLE_LEVEL_REASON} 최근 {DEFAULT_AGENT_LOG_LIMIT}줄까지 표시합니다.
       </Text>
+
+      {copyError ? (
+        <Banner container="section" status="error" title="로그를 복사하지 못했습니다" description={copyError} />
+      ) : null}
 
       {data?.isTruncated ? (
         <Banner

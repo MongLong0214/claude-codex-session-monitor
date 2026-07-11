@@ -17,28 +17,33 @@ import {
  */
 export function readStoredSettings(): DashboardSettings {
   if (typeof window === "undefined") {
-    return DEFAULT_DASHBOARD_SETTINGS;
+    return parseDashboardSettings(undefined);
   }
 
   try {
     const raw = window.localStorage.getItem(DASHBOARD_SETTINGS_STORAGE_KEY);
-    return raw === null ? DEFAULT_DASHBOARD_SETTINGS : parseDashboardSettings(JSON.parse(raw));
+    return raw === null ? parseDashboardSettings(undefined) : parseDashboardSettings(JSON.parse(raw));
   } catch {
-    return DEFAULT_DASHBOARD_SETTINGS;
+    return parseDashboardSettings(undefined);
+  }
+}
+
+function tryWriteStoredSettings(settings: DashboardSettings): boolean {
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  try {
+    window.localStorage.setItem(DASHBOARD_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
+    return true;
+  } catch {
+    return false;
   }
 }
 
 /** Persists settings, degrading to a silent no-op when storage is unavailable (private mode, quota). */
 export function writeStoredSettings(settings: DashboardSettings): void {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  try {
-    window.localStorage.setItem(DASHBOARD_SETTINGS_STORAGE_KEY, JSON.stringify(settings));
-  } catch {
-    // Private browsing or a full quota: keep the in-memory value, never surface the write failure.
-  }
+  tryWriteStoredSettings(settings);
 }
 
 export interface PersistedSettings {
@@ -78,6 +83,7 @@ interface SettingsStore {
  */
 function createSettingsStore(): SettingsStore {
   let snapshot: SettingsSnapshot | null = null;
+  let inMemoryPatch: Partial<DashboardSettings> = {};
   const listeners = new Set<() => void>();
 
   const emit = () => {
@@ -92,7 +98,7 @@ function createSettingsStore(): SettingsStore {
       // Cross-tab: another tab writing (or clearing, key === null) refreshes this tab.
       const onStorage = (event: StorageEvent) => {
         if (event.key === DASHBOARD_SETTINGS_STORAGE_KEY || event.key === null) {
-          snapshot = { settings: readStoredSettings(), isHydrated: true };
+          snapshot = { settings: { ...readStoredSettings(), ...inMemoryPatch }, isHydrated: true };
           emit();
         }
       };
@@ -112,9 +118,8 @@ function createSettingsStore(): SettingsStore {
       return SERVER_SNAPSHOT;
     },
     update(patch) {
-      const current = snapshot?.settings ?? readStoredSettings();
-      const next = { ...current, ...patch };
-      writeStoredSettings(next);
+      const next = { ...readStoredSettings(), ...inMemoryPatch, ...patch };
+      inMemoryPatch = tryWriteStoredSettings(next) ? {} : { ...inMemoryPatch, ...patch };
       snapshot = { settings: next, isHydrated: true };
       emit();
     },

@@ -193,6 +193,18 @@ describe("DetailPanel tab switching", () => {
       expect(postAgentAction).toHaveBeenCalled();
     });
   });
+
+  it("AC: Changes describes view_diff as a point-in-time git status --short working-tree result", async () => {
+    const user = userEvent.setup();
+    renderPanel(CODEX_AGENT_ID);
+    await screen.findByRole("complementary", { name: "에이전트 상세" });
+
+    const tabs = screen.getByRole("navigation", { name: "에이전트 상세 탭" });
+    await user.click(within(tabs).getByRole("button", { name: "변경 사항" }));
+
+    expect(await screen.findByText(/작업 트리의 git status --short 결과/)).toHaveTextContent("조회 시점의 상태");
+    expect(screen.queryByText(/git diff --stat/)).not.toBeInTheDocument();
+  });
 });
 
 describe("DetailPanel disabled-action reasons", () => {

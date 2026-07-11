@@ -81,11 +81,6 @@ function applyIncidentResolved(snapshot: DashboardSnapshot, event: EventOf<"inci
  * in `byId` identical (`===`) to the input's, and leaves `allIds` as the very same array when
  * the id set is unchanged. `heartbeat` is a transport-level liveness signal with no cache
  * payload, so it returns the snapshot itself.
- *
- * `projects` is intentionally never derived here: the event contract has no project event, and
- * the server owns that aggregate (as it does `summary`, which is why `summary_updated` exists).
- * Inventing a client-side projects list would silently diverge until the next refetch papered
- * over it. Reconnects invalidate the snapshot query, which is where `projects` is reconciled.
  */
 export function applyRealtimeEvent(snapshot: DashboardSnapshot, event: RealtimeEvent): DashboardSnapshot {
   switch (event.type) {
@@ -95,6 +90,8 @@ export function applyRealtimeEvent(snapshot: DashboardSnapshot, event: RealtimeE
       return applyAgentRemoved(snapshot, event);
     case "summary_updated":
       return applySummaryUpdated(snapshot, event);
+    case "projects_updated":
+      return commit(snapshot, event, { projects: event.payload });
     case "incident_upserted":
       return applyIncidentUpserted(snapshot, event);
     case "incident_resolved":

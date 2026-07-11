@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { AgentSchema } from "../agent/agent";
+import { AgentSchema, ProjectRefSchema } from "../agent/agent";
 import { DashboardSummarySchema } from "../dashboard";
 import { IncidentSchema } from "../incident/incident";
 
@@ -10,12 +10,14 @@ const baseEventFields = {
   correlationId: z.string().nullable(),
 };
 
-export const AgentUpsertedEventSchema = z.object({
-  ...baseEventFields,
-  type: z.literal("agent_upserted"),
-  entityId: z.string(),
-  payload: AgentSchema,
-});
+export const AgentUpsertedEventSchema = z
+  .object({
+    ...baseEventFields,
+    type: z.literal("agent_upserted"),
+    entityId: z.string(),
+    payload: AgentSchema,
+  })
+  .refine((event) => event.entityId === event.payload.id, { path: ["entityId"] });
 
 export const AgentRemovedEventSchema = z.object({
   ...baseEventFields,
@@ -31,12 +33,21 @@ export const SummaryUpdatedEventSchema = z.object({
   payload: DashboardSummarySchema,
 });
 
-export const IncidentUpsertedEventSchema = z.object({
+export const ProjectsUpdatedEventSchema = z.object({
   ...baseEventFields,
-  type: z.literal("incident_upserted"),
-  entityId: z.string(),
-  payload: IncidentSchema,
+  type: z.literal("projects_updated"),
+  entityId: z.null(),
+  payload: z.array(ProjectRefSchema),
 });
+
+export const IncidentUpsertedEventSchema = z
+  .object({
+    ...baseEventFields,
+    type: z.literal("incident_upserted"),
+    entityId: z.string(),
+    payload: IncidentSchema,
+  })
+  .refine((event) => event.entityId === event.payload.id, { path: ["entityId"] });
 
 export const IncidentResolvedEventSchema = z.object({
   ...baseEventFields,
@@ -56,6 +67,7 @@ export const RealtimeEventSchema = z.discriminatedUnion("type", [
   AgentUpsertedEventSchema,
   AgentRemovedEventSchema,
   SummaryUpdatedEventSchema,
+  ProjectsUpdatedEventSchema,
   IncidentUpsertedEventSchema,
   IncidentResolvedEventSchema,
   HeartbeatEventSchema,

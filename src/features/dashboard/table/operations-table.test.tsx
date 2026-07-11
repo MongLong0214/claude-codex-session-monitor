@@ -18,7 +18,8 @@ vi.mock("@/lib/query/api", () => ({
   postBulkAgentAction: vi.fn(),
 }));
 
-import { fetchDashboardSnapshot, postBulkAgentAction } from "@/lib/query/api";
+import { fetchDashboardSnapshot, postAgentAction, postBulkAgentAction } from "@/lib/query/api";
+import { STOP_DIALOG_DESCRIPTION } from "../detail-panel/agent-actions";
 
 /** Reuses the project's shared deterministic fixture (21 hand-written agents) instead of inventing new test data. */
 const NOW_MS = Date.parse("2026-07-10T12:00:00.000Z");
@@ -31,6 +32,8 @@ function agentIdByDisplayName(displayName: string): AgentId {
   }
   return found.id;
 }
+
+const MONITOR_ID = agentIdByDisplayName("Codex Session Monitor 마이그레이션");
 
 /** `tableState` is owned by DashboardRoot in production (so the command palette can share it); a
  * thin harness stands in for that owner here, using the real hook with its no-persistence defaults. */
@@ -54,8 +57,28 @@ function renderTable(onOpenDetail: (agentId: AgentId) => void = vi.fn()) {
   return { ...utils, queryClient };
 }
 
+async function openRowStopDialog(user: ReturnType<typeof userEvent.setup>) {
+  renderTable();
+  await screen.findByRole("table", { name: "에이전트 운영 테이블" });
+  const trigger = screen.getByRole("button", { name: "Codex Session Monitor 마이그레이션 추가 작업" });
+  await user.click(trigger);
+  const menu = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
+  if (!menu) {
+    throw new Error("row action menu not found");
+  }
+  await user.click(within(menu).getByRole("menuitem", { name: "중지 (SIGTERM)", hidden: true }));
+  return screen.findByRole("alertdialog");
+}
+
 beforeEach(() => {
+  vi.clearAllMocks();
   vi.mocked(fetchDashboardSnapshot).mockResolvedValue(SNAPSHOT);
+  vi.mocked(postAgentAction).mockResolvedValue({
+    agentId: MONITOR_ID,
+    action: "stop",
+    status: "success",
+    message: "모의: 중지 완료",
+  });
 });
 
 describe("OperationsTable search/filter", () => {
@@ -172,9 +195,8 @@ describe("OperationsTable bulk selection", () => {
 
   it("AC: a bulk action reports the success/failed/skipped breakdown from the response", async () => {
     const user = userEvent.setup();
-    const monitorId = agentIdByDisplayName("Codex Session Monitor 마이그레이션");
     vi.mocked(postBulkAgentAction).mockResolvedValue({
-      results: [{ agentId: monitorId, action: "pause", status: "success", message: "모의: 일시정지 완료" }],
+      results: [{ agentId: MONITOR_ID, action: "pause", status: "success", message: "모의: 일시정지 완료" }],
     });
 
     renderTable();
@@ -188,7 +210,56 @@ describe("OperationsTable bulk selection", () => {
 
     expect(await screen.findByText("1건 성공 · 0건 실패 · 0건 건너뜀")).toBeInTheDocument();
     // react-query's mutationFn also receives a context object as a 2nd arg — only the request body is ours to assert.
-    expect(vi.mocked(postBulkAgentAction).mock.calls[0]?.[0]).toEqual({ agentIds: [monitorId], action: "pause" });
+    expect(vi.mocked(postBulkAgentAction).mock.calls[0]?.[0]).toEqual({ agentIds: [MONITOR_ID], action: "pause" });
+  });
+
+  it("AC: bulk stop waits for confirmation before posting", async () => {
+    const user = userEvent.setup();
+    vi.mocked(postBulkAgentAction).mockResolvedValue({
+      results: [{ agentId: MONITOR_ID, action: "stop", status: "success", message: "모의: 중지 완료" }],
+    });
+
+    renderTable();
+    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
+    await user.click(screen.getByRole("checkbox", { name: "Codex Session Monitor 마이그레이션 선택" }));
+
+    const bulkBar = screen.getByRole("region", { name: "선택한 에이전트 일괄 작업" });
+    await user.click(within(bulkBar).getByRole("button", { name: "중지" }));
+
+    const dialog = await screen.findByRole("alertdialog");
+    expect(dialog).toHaveTextContent(STOP_DIALOG_DESCRIPTION);
+    expect(postBulkAgentAction).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "중지" }));
+    await waitFor(() => expect(postBulkAgentAction).toHaveBeenCalledOnce());
+    expect(vi.mocked(postBulkAgentAction).mock.calls[0]?.[0]).toEqual({ agentIds: [MONITOR_ID], action: "stop" });
+  });
+});
+
+describe("OperationsTable row stop confirmation", () => {
+  it("AC: cancelling row-menu stop closes the dialog without posting", async () => {
+    const user = userEvent.setup();
+    const dialog = await openRowStopDialog(user);
+    expect(dialog).toHaveTextContent("Codex Session Monitor 마이그레이션 중지");
+    expect(dialog).toHaveTextContent(STOP_DIALOG_DESCRIPTION);
+    expect(postAgentAction).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "취소" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
+    });
+    expect(postAgentAction).not.toHaveBeenCalledWith(MONITOR_ID, { action: "stop" });
+  });
+
+  it("AC: confirming row-menu stop posts the stop action", async () => {
+    const user = userEvent.setup();
+    const dialog = await openRowStopDialog(user);
+    expect(postAgentAction).not.toHaveBeenCalled();
+
+    await user.click(within(dialog).getByRole("button", { name: "중지" }));
+    await waitFor(() => {
+      expect(postAgentAction).toHaveBeenCalledExactlyOnceWith(MONITOR_ID, { action: "stop" });
+    });
   });
 });
 

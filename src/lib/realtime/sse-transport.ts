@@ -93,6 +93,7 @@ export class SseRealtimeTransport implements RealtimeTransport {
         return;
       }
       // Any inbound byte proves liveness, including payloads we end up dropping.
+      attempt = 0;
       armStaleTimer();
 
       let parsed: unknown;
@@ -162,7 +163,6 @@ export class SseRealtimeTransport implements RealtimeTransport {
         if (disconnected) {
           return;
         }
-        attempt = 0;
         handlers.onStatusChange("open");
         armStaleTimer();
       };

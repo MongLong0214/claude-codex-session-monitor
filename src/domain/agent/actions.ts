@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentIdSchema } from "./agent";
 
 /**
  * Honest action set: the monitor discovers externally-launched Codex processes via
@@ -29,7 +30,7 @@ export const AgentActionRequestSchema = z.object({
 export type AgentActionRequest = z.infer<typeof AgentActionRequestSchema>;
 
 export const AgentActionResultSchema = z.object({
-  agentId: z.string(),
+  agentId: AgentIdSchema,
   action: AgentActionTypeSchema,
   status: z.enum(["success", "failed", "skipped"]),
   message: z.string(),
@@ -37,7 +38,11 @@ export const AgentActionResultSchema = z.object({
 export type AgentActionResult = z.infer<typeof AgentActionResultSchema>;
 
 export const BulkAgentActionRequestSchema = z.object({
-  agentIds: z.array(z.string()).min(1),
+  agentIds: z
+    .array(AgentIdSchema)
+    .min(1)
+    .max(100)
+    .refine((agentIds) => new Set(agentIds).size === agentIds.length, { message: "에이전트 ID는 중복될 수 없습니다." }),
   action: AgentActionTypeSchema,
   force: z.boolean().optional(),
 });

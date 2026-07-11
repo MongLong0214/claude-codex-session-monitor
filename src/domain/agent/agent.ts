@@ -1,6 +1,10 @@
 import { z } from "zod";
 import { AgentStatusSchema } from "./status";
 
+const MAX_AGENT_ID_LENGTH = 256;
+
+export const AgentIdSchema = z.string().min(1).max(MAX_AGENT_ID_LENGTH);
+
 export const ProjectRefSchema = z.object({
   /** Canonical absolute working directory — the real grouping key (git_branch/cwd from Codex state DB). */
   cwd: z.string(),
@@ -11,7 +15,7 @@ export const ProjectRefSchema = z.object({
 export type ProjectRef = z.infer<typeof ProjectRefSchema>;
 
 export const AgentSchema = z.object({
-  id: z.string(),
+  id: AgentIdSchema,
   displayName: z.string(),
   /** Which CLI produced this session — the always-present discriminator between the two sources. */
   source: z.enum(["codex", "claude_code"]),
@@ -32,9 +36,9 @@ export const AgentSchema = z.object({
   startedAt: z.iso.datetime(),
   updatedAt: z.iso.datetime(),
   lastHeartbeatAt: z.iso.datetime().nullable(),
-  runtimePids: z.array(z.number().int()),
-  parentId: z.string().nullable(),
-  childIds: z.array(z.string()),
+  runtimePids: z.array(z.number().int().positive()),
+  parentId: AgentIdSchema.nullable(),
+  childIds: z.array(AgentIdSchema),
   cliVersion: z.string().nullable(),
   approvalMode: z.string().nullable(),
   rolloutPath: z.string(),

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AgentStatusKindSchema } from "./agent/status";
 
 export const ThemeModeSchema = z.enum(["light", "dark", "system"]);
 export type ThemeMode = z.infer<typeof ThemeModeSchema>;
@@ -21,7 +22,7 @@ export const DEFAULT_VISIBLE_COLUMNS = [
 
 export const OPTIONAL_HIDDEN_COLUMNS = ["model", "tokens", "retryCount", "heartbeat", "runtimeId"] as const;
 
-const sortStateSchema = z.object({ id: z.string(), desc: z.boolean() });
+const sortStateSchema = z.object({ id: z.string().min(1).max(64), desc: z.boolean() });
 
 const dashboardSettingsSchemaV1 = z.object({
   schemaVersion: z.literal(1),
@@ -29,11 +30,11 @@ const dashboardSettingsSchemaV1 = z.object({
   sidebarCollapsed: z.boolean(),
   rowDensity: RowDensitySchema,
   visibleColumns: z.array(z.string()),
-  columnWidths: z.record(z.string(), z.number()),
-  statusFilter: z.array(z.string()),
-  projectFilter: z.array(z.string()),
-  branchFilter: z.array(z.string()),
-  sort: z.array(sortStateSchema),
+  columnWidths: z.record(z.string(), z.number().min(40).max(2_000)),
+  statusFilter: z.array(AgentStatusKindSchema).max(AgentStatusKindSchema.options.length),
+  projectFilter: z.array(z.string().min(1).max(4_096)).max(100),
+  branchFilter: z.array(z.string().min(1).max(1_024)).max(100),
+  sort: z.array(sortStateSchema).max(DEFAULT_VISIBLE_COLUMNS.length + OPTIONAL_HIDDEN_COLUMNS.length),
 });
 export type DashboardSettings = z.infer<typeof dashboardSettingsSchemaV1>;
 
@@ -62,5 +63,5 @@ export function parseDashboardSettings(raw: unknown): DashboardSettings {
   if (result.success) {
     return result.data;
   }
-  return DEFAULT_DASHBOARD_SETTINGS;
+  return structuredClone(DEFAULT_DASHBOARD_SETTINGS);
 }

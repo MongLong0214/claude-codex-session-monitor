@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { agentCommandRepository, dashboardRepository } from "@/data-access/repositories";
 import type { AgentActionResult, BulkAgentActionResponse } from "@/domain/agent/actions";
 import { BulkAgentActionRequestSchema } from "@/domain/agent/actions";
-import { guardLocalRequest } from "@/lib/security";
+import { guardLocalRequest, readJsonRequestBody } from "@/lib/security";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,23 +14,21 @@ export async function POST(request: Request) {
     return denied;
   }
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return NextResponse.json({ error: "JSON 본문을 파싱하지 못했습니다." }, { status: 400 });
+  const body = await readJsonRequestBody(request);
+  if (!body.ok) {
+    return body.response;
   }
 
-  const parsed = BulkAgentActionRequestSchema.safeParse(body);
+  const parsed = BulkAgentActionRequestSchema.safeParse(body.value);
   if (!parsed.success) {
-    return NextResponse.json({ error: "요청 본문이 올바르지 않습니다.", issues: parsed.error.issues }, { status: 400 });
+    return NextResponse.json({ error: "요청 본문이 올바르지 않습니다." }, { status: 400 });
   }
 
   const { agentIds, action, force } = parsed.data;
   const snapshot = await dashboardRepository.getSnapshot();
 
   /** Unknown ids degrade to a per-item "skipped" result instead of failing the whole batch. */
-  const knownIds = agentIds.filter((agentId) => snapshot.byId[agentId] !== undefined);
+  const knownIds = agentIds.filter((agentId) => Object.hasOwn(snapshot.byId, agentId));
   const executed = await agentCommandRepository.executeBulk(knownIds, action, force);
   const resultById = new Map(executed.map((result) => [result.agentId, result]));
 

@@ -1,5 +1,6 @@
 "use client";
 
+import { useImperativeAlertDialog } from "@astryxdesign/core/AlertDialog";
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
@@ -12,6 +13,7 @@ import type { AgentActionType } from "@/domain/agent/actions";
 import type { AgentId, ProjectRef } from "@/domain/agent/agent";
 import { useAgentAction, useBulkAgentAction, type OptimisticStatus } from "@/lib/query/use-agent-action";
 import { useDashboardSnapshot } from "@/lib/query/use-dashboard-snapshot";
+import { STOP_DIALOG_DESCRIPTION } from "../detail-panel/agent-actions";
 import { AgentTableRow } from "./agent-table-row";
 import { BulkActionBar } from "./bulk-action-bar";
 import {
@@ -116,10 +118,16 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
   const showToast = useToast();
   const { mutate: runAgentAction } = useAgentAction();
   const { mutate: runBulkAgentAction, isPending: isBulkActionPending } = useBulkAgentAction();
+  const { element: stopDialog, hide: hideStopDialog, show: showStopDialog } = useImperativeAlertDialog();
 
   const scrollElementRef = useRef<HTMLDivElement>(null);
+  const dataRef = useRef(data);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const isFocusPendingRef = useRef(false);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   const { columnSizing, columnVisibility, density, filters, rowSelection, setRowSelection, sorting } = tableState;
 
@@ -133,6 +141,8 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
   // so memo()'d rows keep their identity check even while the container re-renders.
   const columnLayout = useMemo(() => buildColumnLayout(columnVisibility, columnSizing), [columnVisibility, columnSizing]);
 
+  // TanStack Table returns non-memoizable functions; React Compiler safely skips this hook.
+  // eslint-disable-next-line react-hooks/incompatible-library
   const table = useReactTable<AgentId>({
     data: visibleAgentIds,
     columns: agentTableColumns,
@@ -186,7 +196,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
     [setRowSelection],
   );
 
-  const handleRowAction = useCallback(
+  const executeRowAction = useCallback(
     (agentId: AgentId, action: AgentActionType) => {
       const optimisticStatus = OPTIMISTIC_STATUS_BY_ACTION[action];
       runAgentAction(
@@ -205,6 +215,37 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
       );
     },
     [runAgentAction, showToast],
+  );
+
+  const requestStopConfirmation = useCallback(
+    (title: string, onConfirm: () => void) => {
+      showStopDialog({
+        title,
+        description: STOP_DIALOG_DESCRIPTION,
+        actionLabel: "중지",
+        cancelLabel: "취소",
+        actionVariant: "destructive",
+        onAction: () => {
+          hideStopDialog();
+          onConfirm();
+        },
+      });
+    },
+    [hideStopDialog, showStopDialog],
+  );
+
+  const handleRowAction = useCallback(
+    (agentId: AgentId, action: AgentActionType) => {
+      if (action !== "stop") {
+        executeRowAction(agentId, action);
+        return;
+      }
+
+      requestStopConfirmation(`${dataRef.current?.byId[agentId]?.displayName ?? "에이전트"} 중지`, () =>
+        executeRowAction(agentId, "stop"),
+      );
+    },
+    [executeRowAction, requestStopConfirmation],
   );
 
   const moveFocus = useCallback(
@@ -279,13 +320,10 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
 
   const selectedAgentIds = table.getSelectedRowModel().rows.map((row) => row.original);
 
-  const handleBulkAction = useCallback(
-    (action: AgentActionType) => {
-      if (selectedAgentIds.length === 0) {
-        return;
-      }
+  const executeBulkAction = useCallback(
+    (agentIds: AgentId[], action: AgentActionType) => {
       runBulkAgentAction(
-        { agentIds: selectedAgentIds, action },
+        { agentIds, action },
         {
           onSuccess: ({ results }) => {
             const succeeded = results.filter((result) => result.status === "success").length;
@@ -300,7 +338,24 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
         },
       );
     },
-    [runBulkAgentAction, selectedAgentIds, showToast],
+    [runBulkAgentAction, showToast],
+  );
+
+  const handleBulkAction = useCallback(
+    (action: AgentActionType) => {
+      if (selectedAgentIds.length === 0) {
+        return;
+      }
+      if (action !== "stop") {
+        executeBulkAction(selectedAgentIds, action);
+        return;
+      }
+
+      requestStopConfirmation(`선택한 에이전트 ${selectedAgentIds.length}개 중지`, () =>
+        executeBulkAction(selectedAgentIds, "stop"),
+      );
+    },
+    [executeBulkAction, requestStopConfirmation, selectedAgentIds],
   );
 
   if (!data) {
@@ -436,6 +491,8 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
           </table>
         </div>
       )}
+
+      {stopDialog}
     </div>
   );
 }

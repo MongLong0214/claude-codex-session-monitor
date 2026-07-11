@@ -77,7 +77,7 @@ function detectStaleHeartbeat({ agents }: IncidentDetectionInput): Incident[] {
 const DETECTORS: Record<DetectableIncidentType, IncidentDetector> = {
   stale_heartbeat: detectStaleHeartbeat,
 
-  // Needs a failure signal: Codex emits no error event type, so the local adapter never yields "failed".
+  // Needs repeated task-level failures; one observed failed session does not establish repetition.
   repeated_failure: () => [],
 
   // Needs a per-task expected-duration baseline; raw uptime alone does not make a run abnormal.
@@ -98,7 +98,7 @@ const DETECTORS: Record<DetectableIncidentType, IncidentDetector> = {
   // Needs a blocker signal: no event distinguishes a blocked agent from an idle one.
   dependency_blocked: () => [],
 
-  // Needs an error/log-level signal: the rollout vocabulary has no error event type to count.
+  // Needs a bounded error-rate window; one observed error event does not establish a spike.
   log_error_spike: () => [],
 };
 

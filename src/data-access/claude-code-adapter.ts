@@ -1,9 +1,10 @@
-import { createReadStream } from "node:fs";
-import { readFile, readdir, stat } from "node:fs/promises";
+import { constants } from "node:fs";
+import { lstat, open, readdir, realpath } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
 
+import { AgentIdSchema } from "@/domain/agent/agent";
 import type { Agent, ProjectRef } from "@/domain/agent/agent";
 import type { AgentStatus } from "@/domain/agent/status";
 
@@ -36,6 +37,13 @@ const MAX_SESSIONS = 40;
 const SCAN_CONCURRENCY = 4;
 const DISPLAY_NAME_MAX = 120;
 const CURRENT_TASK_MAX = 220;
+/**
+ * Security ceilings, not pagination: an oversized input is skipped whole so tokens and cost can
+ * never look complete after only a prefix was parsed. These comfortably exceed ordinary active
+ * transcripts/indexes while bounding hostile or corrupt local files.
+ */
+const MAX_TRANSCRIPT_BYTES = 64 * 1024 * 1024;
+const MAX_SESSION_INDEX_BYTES = 8 * 1024 * 1024;
 
 const SUBSTANTIVE_TYPES = new Set(["user", "assistant", "system", "attachment"]);
 
@@ -55,9 +63,10 @@ export function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-function asNonNegativeInteger(value: unknown): number {
+function asNonNegativeInteger(value: unknown): number | null {
+  if (value === undefined || value === null) return 0;
   const numeric = typeof value === "number" ? value : Number(value);
-  return Number.isFinite(numeric) && numeric > 0 ? Math.trunc(numeric) : 0;
+  return Number.isSafeInteger(numeric) && numeric >= 0 ? numeric : null;
 }
 
 /** Mirrors local-adapter.compactText: collapse whitespace, trim, ellipsize past maxLength. */
@@ -92,6 +101,17 @@ function warn(message: string): string {
   return `Claude Code 세션 읽기 경고: ${message}`;
 }
 
+function errorCode(error: unknown): string | null {
+  return error instanceof Error && "code" in error && typeof error.code === "string" ? error.code : null;
+}
+
+function isContained(parent: string, child: string): boolean {
+  const relative = path.relative(parent, child);
+  return (
+    relative.length > 0 && relative !== ".." && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative)
+  );
+}
+
 /** One session index entry, as found in `<projectDir>/sessions-index.json` when present. */
 interface SessionIndexEntry {
   sessionId: string;
@@ -100,32 +120,71 @@ interface SessionIndexEntry {
   firstPrompt: string | null;
 }
 
+interface SessionIndexLoad {
+  entries: Map<string, SessionIndexEntry>;
+  warning: string | null;
+}
+
 /**
  * Loads the project directory's sessions-index.json into a lookup by sessionId. On this machine the
  * index was observed to be entirely stale (its fullPath entries pointed at deleted files), so it is
  * used ONLY as optional metadata enrichment for files we independently discovered — never as the
- * enumeration source. Absent/corrupt index ⇒ empty map, degrading exactly like the Codex adapter.
+ * enumeration source. An absent index stays clean; a corrupt/unreadable one yields empty metadata
+ * plus a warning while the independently discovered transcript remains usable.
  */
-async function readSessionIndex(projectDir: string): Promise<Map<string, SessionIndexEntry>> {
+async function readSessionIndex(projectDir: string): Promise<SessionIndexLoad> {
   const byId = new Map<string, SessionIndexEntry>();
+  const indexPath = path.join(projectDir, "sessions-index.json");
+
+  let handle;
+  try {
+    handle = await open(indexPath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
+  } catch (error) {
+    const missing = error instanceof Error && errorCode(error) === "ENOENT";
+    return {
+      entries: byId,
+      warning: missing ? null : warn("세션 인덱스를 읽지 못해 메타데이터 없이 표시합니다."),
+    };
+  }
 
   let raw: string;
   try {
-    raw = await readFile(path.join(projectDir, "sessions-index.json"), "utf8");
+    const fileStat = await handle.stat();
+    if (!fileStat.isFile()) {
+      return { entries: byId, warning: warn("세션 인덱스가 일반 파일이 아니어서 건너뛰었습니다.") };
+    }
+    if (fileStat.size > MAX_SESSION_INDEX_BYTES) {
+      return { entries: byId, warning: warn("세션 인덱스가 8 MiB 크기 제한을 초과해 건너뛰었습니다.") };
+    }
+
+    const buffer = Buffer.allocUnsafe(MAX_SESSION_INDEX_BYTES + 1);
+    let bytesRead = 0;
+    while (bytesRead < buffer.length) {
+      const chunk = await handle.read(buffer, bytesRead, buffer.length - bytesRead, bytesRead);
+      if (chunk.bytesRead === 0) break;
+      bytesRead += chunk.bytesRead;
+    }
+    if (bytesRead > MAX_SESSION_INDEX_BYTES) {
+      return { entries: byId, warning: warn("세션 인덱스가 8 MiB 크기 제한을 초과해 건너뛰었습니다.") };
+    }
+    raw = buffer.toString("utf8", 0, bytesRead);
   } catch {
-    return byId;
+    return { entries: byId, warning: warn("세션 인덱스를 읽지 못해 메타데이터 없이 표시합니다.") };
+  } finally {
+    await handle.close();
   }
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(raw);
-  } catch {
-    return byId;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) throw error;
+    return { entries: byId, warning: warn("세션 인덱스 JSON이 올바르지 않아 메타데이터 없이 표시합니다.") };
   }
 
   const entries = toRecord(parsed)?.entries;
   if (!Array.isArray(entries)) {
-    return byId;
+    return { entries: byId, warning: warn("세션 인덱스 형식이 올바르지 않아 메타데이터 없이 표시합니다.") };
   }
 
   for (const entry of entries) {
@@ -143,7 +202,7 @@ async function readSessionIndex(projectDir: string): Promise<Map<string, Session
     });
   }
 
-  return byId;
+  return { entries: byId, warning: null };
 }
 
 /** Deduplicated per-response usage — one entry per Claude API response (message.id), not per line. */
@@ -155,6 +214,7 @@ interface ResponseUsage {
   cacheReadTokens: number;
   ephemeral5mTokens: number;
   ephemeral1hTokens: number;
+  valid?: boolean;
 }
 
 /** Everything one JSONL transcript yields after a single streaming pass. */
@@ -253,15 +313,28 @@ function accumulateAssistant(scan: SessionScan, message: Record<string, unknown>
 
   const usage = toRecord(message.usage) ?? {};
   const cacheCreation = toRecord(usage.cache_creation) ?? {};
+  const inputTokens = asNonNegativeInteger(usage.input_tokens);
+  const outputTokens = asNonNegativeInteger(usage.output_tokens);
+  const cacheCreationTokens = asNonNegativeInteger(usage.cache_creation_input_tokens);
+  const cacheReadTokens = asNonNegativeInteger(usage.cache_read_input_tokens);
+  const ephemeral5mTokens = asNonNegativeInteger(cacheCreation.ephemeral_5m_input_tokens);
+  const ephemeral1hTokens = asNonNegativeInteger(cacheCreation.ephemeral_1h_input_tokens);
 
   scan.responsesById.set(id, {
     model: asString(message.model),
-    inputTokens: asNonNegativeInteger(usage.input_tokens),
-    outputTokens: asNonNegativeInteger(usage.output_tokens),
-    cacheCreationTokens: asNonNegativeInteger(usage.cache_creation_input_tokens),
-    cacheReadTokens: asNonNegativeInteger(usage.cache_read_input_tokens),
-    ephemeral5mTokens: asNonNegativeInteger(cacheCreation.ephemeral_5m_input_tokens),
-    ephemeral1hTokens: asNonNegativeInteger(cacheCreation.ephemeral_1h_input_tokens),
+    inputTokens: inputTokens ?? 0,
+    outputTokens: outputTokens ?? 0,
+    cacheCreationTokens: cacheCreationTokens ?? 0,
+    cacheReadTokens: cacheReadTokens ?? 0,
+    ephemeral5mTokens: ephemeral5mTokens ?? 0,
+    ephemeral1hTokens: ephemeral1hTokens ?? 0,
+    valid:
+      inputTokens !== null &&
+      outputTokens !== null &&
+      cacheCreationTokens !== null &&
+      cacheReadTokens !== null &&
+      ephemeral5mTokens !== null &&
+      ephemeral1hTokens !== null,
   });
 }
 
@@ -325,36 +398,83 @@ function applyLine(scan: SessionScan, entry: Record<string, unknown>): void {
 
 async function scanSessionFile(filePath: string): Promise<SessionScan> {
   const scan = emptyScan();
-  const reader = createInterface({ input: createReadStream(filePath), crlfDelay: Infinity });
+  const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
 
   try {
-    for await (const line of reader) {
-      /** Cheap prefilter — most non-JSON/blank lines never reach JSON.parse. */
-      if (!line.startsWith("{")) {
-        continue;
-      }
+    const fileStat = await handle.stat();
+    if (!fileStat.isFile() || fileStat.size > MAX_TRANSCRIPT_BYTES) throw new TranscriptRejectedError();
 
-      try {
-        const entry = toRecord(JSON.parse(line));
-        if (entry) {
-          applyLine(scan, entry);
+    const input = handle.createReadStream({ autoClose: false });
+    let bytesRead = 0;
+    input.on("data", (chunk: Buffer) => {
+      bytesRead += chunk.byteLength;
+      if (bytesRead > MAX_TRANSCRIPT_BYTES) input.destroy(new TranscriptRejectedError());
+    });
+    const reader = createInterface({ input, crlfDelay: Infinity });
+
+    try {
+      for await (const line of reader) {
+        /** Cheap prefilter — most non-JSON/blank lines never reach JSON.parse. */
+        const candidate = line.trimStart();
+        if (!candidate.startsWith("{")) continue;
+
+        try {
+          const entry = toRecord(JSON.parse(candidate));
+          if (entry) applyLine(scan, entry);
+        } catch (error) {
+          if (!(error instanceof SyntaxError)) throw error;
+          // 잘린 줄이나 비 JSON 줄은 무시한다.
         }
-      } catch {
-        // 잘린 줄이나 비 JSON 줄은 무시한다.
       }
+    } finally {
+      reader.close();
+      input.destroy();
     }
   } finally {
-    reader.close();
+    await handle.close();
   }
 
   return scan;
 }
 
+class TranscriptRejectedError extends Error {
+  override readonly name = "TranscriptRejectedError";
+}
+
+class InvalidTokenUsageError extends Error {
+  override readonly name = "InvalidTokenUsageError";
+}
+
+function responseTokenTotal(usage: ResponseUsage): number | null {
+  if (
+    usage.valid === false ||
+    !Number.isSafeInteger(usage.inputTokens) ||
+    !Number.isSafeInteger(usage.outputTokens) ||
+    !Number.isSafeInteger(usage.cacheCreationTokens) ||
+    !Number.isSafeInteger(usage.cacheReadTokens) ||
+    !Number.isSafeInteger(usage.ephemeral5mTokens) ||
+    !Number.isSafeInteger(usage.ephemeral1hTokens) ||
+    usage.inputTokens < 0 ||
+    usage.outputTokens < 0 ||
+    usage.cacheCreationTokens < 0 ||
+    usage.cacheReadTokens < 0 ||
+    usage.ephemeral5mTokens < 0 ||
+    usage.ephemeral1hTokens < 0
+  ) {
+    return null;
+  }
+
+  const total = usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens;
+  return Number.isSafeInteger(total) ? total : null;
+}
+
 /** Total tokens billed across the session (deduped) — spec's four raw usage counters, summed. */
-export function totalTokens(responses: Iterable<ResponseUsage>): number {
+export function totalTokens(responses: Iterable<ResponseUsage>): number | null {
   let total = 0;
   for (const usage of responses) {
-    total += usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens;
+    const responseTotal = responseTokenTotal(usage);
+    if (responseTotal === null || !Number.isSafeInteger(total + responseTotal)) return null;
+    total += responseTotal;
   }
   return total;
 }
@@ -368,28 +488,40 @@ export function totalTokens(responses: Iterable<ResponseUsage>): number {
  */
 export function sessionCostUsd(responses: Iterable<ResponseUsage>): number | null {
   let cost = 0;
+  let tokenTotal = 0;
 
   for (const usage of responses) {
+    const responseTotal = responseTokenTotal(usage);
+    if (responseTotal === null || !Number.isSafeInteger(tokenTotal + responseTotal)) return null;
+    tokenTotal += responseTotal;
+
+    if (usage.ephemeral5mTokens + usage.ephemeral1hTokens !== usage.cacheCreationTokens) {
+      return null;
+    }
+
     const rates = ratesForModel(usage.model);
     if (!rates) {
-      const billed =
-        usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens > 0;
+      const billed = usage.inputTokens + usage.outputTokens + usage.cacheCreationTokens + usage.cacheReadTokens > 0;
       if (billed) {
         return null;
       }
       continue;
     }
 
-    cost +=
+    const nextCost =
+      cost +
       (usage.inputTokens * rates.input +
         usage.ephemeral5mTokens * rates.cacheWrite5m +
         usage.ephemeral1hTokens * rates.cacheWrite1h +
         usage.cacheReadTokens * rates.cacheRead +
         usage.outputTokens * rates.output) /
-      1_000_000;
+        1_000_000;
+    if (!Number.isFinite(nextCost)) return null;
+    cost = nextCost;
   }
 
-  return Number(cost.toFixed(4));
+  const rounded = Number(cost.toFixed(4));
+  return Number.isFinite(rounded) ? rounded : null;
 }
 
 /** Prefer the auto-generated conversation title; fall back to a real first prompt; else a placeholder. */
@@ -432,52 +564,119 @@ function projectRefFromCwd(cwd: string | null): ProjectRef {
 
 interface DiscoveredFile {
   sessionId: string;
+  agentId: string;
   filePath: string;
   projectDir: string;
   mtimeMs: number;
 }
 
-async function discoverActiveFiles(now: number): Promise<DiscoveredFile[]> {
-  const projectsRoot = path.join(claudeHome(), "projects");
+interface DiscoveryResult {
+  files: DiscoveredFile[];
+  warnings: string[];
+}
 
-  let projectDirs: string[];
+async function discoverActiveFiles(now: number): Promise<DiscoveryResult> {
+  const projectsRoot = path.join(claudeHome(), "projects");
+  const warnings: string[] = [];
+
+  let canonicalRoot: string;
   try {
-    projectDirs = await readdir(projectsRoot);
+    canonicalRoot = await realpath(projectsRoot);
+  } catch (error) {
+    const missing = error instanceof Error && errorCode(error) === "ENOENT";
+    return {
+      files: [],
+      warnings: missing ? [] : [warn("세션 루트 디렉터리를 읽지 못했습니다.")],
+    };
+  }
+
+  let projectDirs;
+  try {
+    projectDirs = await readdir(canonicalRoot, { withFileTypes: true });
   } catch {
-    return [];
+    return { files: [], warnings: [warn("세션 루트 디렉터리를 읽지 못했습니다.")] };
   }
 
   const found: DiscoveredFile[] = [];
+  let unreadableProjects = 0;
+  let unreadableTranscripts = 0;
+  let nonRegularTranscripts = 0;
+  let oversizedTranscripts = 0;
+  let invalidSessionIds = 0;
 
   await Promise.all(
-    projectDirs.map(async (dirName) => {
-      const projectDir = path.join(projectsRoot, dirName);
-      let entries: string[];
-      try {
-        entries = await readdir(projectDir);
-      } catch {
-        return;
-      }
+    projectDirs
+      .filter((entry) => entry.isDirectory())
+      .map(async (projectEntry) => {
+        const projectPath = path.join(canonicalRoot, projectEntry.name);
+        let projectDir: string;
+        let entries;
+        try {
+          projectDir = await realpath(projectPath);
+          if (!isContained(canonicalRoot, projectDir)) return;
+          entries = await readdir(projectDir, { withFileTypes: true });
+        } catch {
+          unreadableProjects += 1;
+          return;
+        }
 
-      await Promise.all(
-        entries
-          .filter((entry) => entry.endsWith(".jsonl"))
-          .map(async (entry) => {
-            const filePath = path.join(projectDir, entry);
-            try {
-              const fileStat = await stat(filePath);
-              if (now - fileStat.mtimeMs <= ACTIVE_WINDOW_MS) {
-                found.push({ sessionId: entry.slice(0, -".jsonl".length), filePath, projectDir, mtimeMs: fileStat.mtimeMs });
+        const transcriptEntries = entries.filter((entry) => entry.name.endsWith(".jsonl"));
+        nonRegularTranscripts += transcriptEntries.filter((entry) => !entry.isFile()).length;
+
+        await Promise.all(
+          transcriptEntries
+            .filter((entry) => entry.isFile())
+            .map(async (entry) => {
+              const sessionId = entry.name.slice(0, -".jsonl".length);
+              const agentId = `claude_code:${sessionId}`;
+              if (!AgentIdSchema.safeParse(agentId).success) {
+                invalidSessionIds += 1;
+                return;
               }
-            } catch {
-              // 사라졌거나 접근 불가한 파일은 건너뛴다.
-            }
-          }),
-      );
-    }),
+              const candidatePath = path.join(projectDir, entry.name);
+              try {
+                const filePath = await realpath(candidatePath);
+                if (!isContained(projectDir, filePath)) return;
+                const fileStat = await lstat(filePath);
+                if (!fileStat.isFile()) return;
+                if (now - fileStat.mtimeMs > ACTIVE_WINDOW_MS) return;
+                if (fileStat.size > MAX_TRANSCRIPT_BYTES) {
+                  oversizedTranscripts += 1;
+                  return;
+                }
+                found.push({
+                  sessionId,
+                  agentId,
+                  filePath,
+                  projectDir,
+                  mtimeMs: fileStat.mtimeMs,
+                });
+              } catch {
+                // 사라졌거나 접근 불가한 파일은 건너뛴다.
+                unreadableTranscripts += 1;
+              }
+            }),
+        );
+      }),
   );
 
-  return found.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  if (unreadableProjects > 0) {
+    warnings.push(warn(`프로젝트 디렉터리 ${unreadableProjects}개를 읽지 못해 건너뛰었습니다.`));
+  }
+  if (unreadableTranscripts > 0) {
+    warnings.push(warn(`세션 파일 ${unreadableTranscripts}개를 검사하지 못해 건너뛰었습니다.`));
+  }
+  if (nonRegularTranscripts > 0) {
+    warnings.push(warn(`일반 파일이 아닌 세션 항목 ${nonRegularTranscripts}개를 열지 않고 건너뛰었습니다.`));
+  }
+  if (oversizedTranscripts > 0) {
+    warnings.push(warn(`세션 파일 ${oversizedTranscripts}개가 64 MiB 크기 제한을 초과해 건너뛰었습니다.`));
+  }
+  if (invalidSessionIds > 0) {
+    warnings.push(warn(`ID 길이 제한을 벗어난 세션 파일 ${invalidSessionIds}개를 건너뛰었습니다.`));
+  }
+
+  return { files: found.sort((left, right) => right.mtimeMs - left.mtimeMs), warnings };
 }
 
 async function mapWithConcurrency<T, R>(
@@ -503,16 +702,23 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
-function toAgent(file: DiscoveredFile, scan: SessionScan, indexEntry: SessionIndexEntry | undefined, now: number): Agent {
+function toAgent(
+  file: DiscoveredFile,
+  scan: SessionScan,
+  indexEntry: SessionIndexEntry | undefined,
+  now: number,
+): Agent {
   const isSubagent = indexEntry?.isSidechain === true;
   const responses = scan.responsesById.values();
   const lastActivityMs = scan.lastActivityMs ?? file.mtimeMs;
   const startedAtMs = scan.firstActivityMs ?? lastActivityMs;
   const aiTitle = scan.aiTitle ?? indexEntry?.aiTitle ?? null;
   const firstUserText = scan.firstUserText ?? indexEntry?.firstPrompt ?? null;
+  const tokensUsed = totalTokens(scan.responsesById.values());
+  if (tokensUsed === null) throw new InvalidTokenUsageError();
 
   return {
-    id: file.sessionId,
+    id: file.agentId,
     displayName: pickDisplayName(aiTitle, firstUserText, isSubagent),
     role: isSubagent ? "subagent" : "main",
     project: projectRefFromCwd(scan.cwd),
@@ -522,7 +728,7 @@ function toAgent(file: DiscoveredFile, scan: SessionScan, indexEntry: SessionInd
     reasoningEffort: null,
     status: classifyClaudeStatus(lastActivityMs, now),
     currentTask: scan.lastText ?? (firstUserText ? compactText(firstUserText) : null),
-    tokensUsed: totalTokens(scan.responsesById.values()),
+    tokensUsed,
     costUsd: sessionCostUsd(responses),
     startedAt: toIso(startedAtMs),
     updatedAt: toIso(lastActivityMs),
@@ -552,7 +758,9 @@ export async function collectClaudeCodeAgents(now: number): Promise<ClaudeCodeCo
 
   let discovered: DiscoveredFile[];
   try {
-    discovered = await discoverActiveFiles(now);
+    const discovery = await discoverActiveFiles(now);
+    discovered = discovery.files;
+    warnings.push(...discovery.warnings);
   } catch {
     return { agents: [], warnings: [warn("세션 디렉터리를 읽지 못했습니다.")] };
   }
@@ -566,29 +774,47 @@ export async function collectClaudeCodeAgents(now: number): Promise<ClaudeCodeCo
     discovered = discovered.slice(0, MAX_SESSIONS);
   }
 
-  const indexCache = new Map<string, Map<string, SessionIndexEntry>>();
+  const indexCache = new Map<string, Promise<Map<string, SessionIndexEntry>>>();
+  let rejectedTranscripts = 0;
+  let invalidTokenUsages = 0;
   async function indexFor(projectDir: string): Promise<Map<string, SessionIndexEntry>> {
     const cached = indexCache.get(projectDir);
-    if (cached) {
-      return cached;
-    }
-    const loaded = await readSessionIndex(projectDir);
-    indexCache.set(projectDir, loaded);
-    return loaded;
+    if (cached) return cached;
+
+    const loading = readSessionIndex(projectDir).then((loaded) => {
+      if (loaded.warning) warnings.push(loaded.warning);
+      return loaded.entries;
+    });
+    indexCache.set(projectDir, loading);
+    return loading;
   }
 
   const agents = await mapWithConcurrency(discovered, SCAN_CONCURRENCY, async (file) => {
     try {
       const [scan, index] = await Promise.all([scanSessionFile(file.filePath), indexFor(file.projectDir)]);
       return toAgent(file, scan, index.get(file.sessionId), now);
-    } catch {
+    } catch (error) {
+      if (error instanceof TranscriptRejectedError) {
+        rejectedTranscripts += 1;
+      } else if (error instanceof InvalidTokenUsageError) {
+        invalidTokenUsages += 1;
+      }
       return null;
     }
   });
 
   const usable = agents.filter((agent): agent is Agent => agent !== null);
-  if (usable.length < discovered.length) {
-    warnings.push(warn(`세션 파일 ${discovered.length - usable.length}개를 읽지 못해 건너뛰었습니다.`));
+  if (rejectedTranscripts > 0) {
+    warnings.push(
+      warn(`세션 파일 ${rejectedTranscripts}개가 64 MiB 크기 제한을 초과하거나 일반 파일이 아니어서 건너뛰었습니다.`),
+    );
+  }
+  if (invalidTokenUsages > 0) {
+    warnings.push(warn(`안전한 정수 범위를 벗어난 토큰 사용량이 있는 세션 ${invalidTokenUsages}개를 건너뛰었습니다.`));
+  }
+  const unreadable = discovered.length - usable.length - rejectedTranscripts - invalidTokenUsages;
+  if (unreadable > 0) {
+    warnings.push(warn(`세션 파일 ${unreadable}개를 읽지 못해 건너뛰었습니다.`));
   }
 
   /** Deterministic order (updatedAt desc, id asc) so the merged snapshot fingerprint is stable. */

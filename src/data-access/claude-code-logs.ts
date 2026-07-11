@@ -60,16 +60,17 @@ export function logLinesFromClaudeCodeTail(tail: string, limit: number): TailLog
     });
   }
 
-  const kept = activities.slice(-limit);
   const seenAt = new Map<string, number>();
+  const lines = activities.map((activity) => ({
+    id: nextId(activity.timestamp, seenAt),
+    timestamp: activity.timestamp,
+    level: CLAUDE_LOG_LEVEL,
+    text: activity.text,
+  })) satisfies AgentLogLine[];
+  const kept = lines.slice(-limit);
 
   return {
-    lines: kept.map((activity) => ({
-      id: nextId(activity.timestamp, seenAt),
-      timestamp: activity.timestamp,
-      level: CLAUDE_LOG_LEVEL,
-      text: activity.text,
-    })) satisfies AgentLogLine[],
+    lines: kept,
     droppedCount: activities.length - kept.length,
   };
 }

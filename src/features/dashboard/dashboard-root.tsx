@@ -37,15 +37,28 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
   const { data, isLoading, isError, error } = useDashboardSnapshot();
   const { status: connectionStatus } = useRealtimeSync();
 
-  const [statusFilter, setStatusFilter] = useState<AgentStatusKind[]>([]);
-  const [selectedView, setSelectedView] = useState<DashboardView>("all");
+  const projectFilterCwd = settings.projectFilter[0] ?? null;
+  const [selectedView, setSelectedView] = useState<DashboardView>(() =>
+    projectFilterCwd === null ? "all" : { projectCwd: projectFilterCwd },
+  );
+  const [lastProjectFilterCwd, setLastProjectFilterCwd] = useState(projectFilterCwd);
+  if (projectFilterCwd !== lastProjectFilterCwd) {
+    setLastProjectFilterCwd(projectFilterCwd);
+    if (selectedView !== "incidents") {
+      setSelectedView(projectFilterCwd === null ? "all" : { projectCwd: projectFilterCwd });
+    }
+  }
   const [isCommandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
-  const toggleStatusFilter = useCallback((status: AgentStatusKind) => {
-    setStatusFilter((current) =>
-      current.includes(status) ? current.filter((value) => value !== status) : [...current, status],
-    );
-  }, []);
+  const toggleStatusFilter = useCallback(
+    (status: AgentStatusKind) => {
+      const current = settings.statusFilter;
+      onUpdateSettings({
+        statusFilter: current.includes(status) ? current.filter((value) => value !== status) : [...current, status],
+      });
+    },
+    [onUpdateSettings, settings.statusFilter],
+  );
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -74,6 +87,16 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
     setSelectedView({ projectCwd: incident.affectedProjectIds[0] ?? "" });
   }, []);
 
+  if (isError && !data) {
+    return (
+      <Center height="100vh">
+        <Text type="body">
+          대시보드를 불러오지 못했습니다: {error instanceof Error ? error.message : "알 수 없는 오류"}
+        </Text>
+      </Center>
+    );
+  }
+
   if (isLoading || !data) {
     return (
       <Center height="100vh">
@@ -82,18 +105,10 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
     );
   }
 
-  if (isError) {
-    return (
-      <Center height="100vh">
-        <Text type="body">대시보드를 불러오지 못했습니다: {error instanceof Error ? error.message : "알 수 없는 오류"}</Text>
-      </Center>
-    );
-  }
-
   return (
     <DashboardAppShell
       summary={data.summary}
-      statusFilter={statusFilter}
+      statusFilter={settings.statusFilter}
       onToggleStatusFilter={toggleStatusFilter}
       connectionStatus={connectionStatus}
       lastSyncedAt={data.lastSyncedAt}
@@ -101,9 +116,15 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
       isSidebarCollapsed={settings.sidebarCollapsed}
       onSidebarCollapsedChange={(isCollapsed) => onUpdateSettings({ sidebarCollapsed: isCollapsed })}
       selectedView={selectedView}
-      onSelectAll={() => setSelectedView("all")}
+      onSelectAll={() => {
+        setSelectedView("all");
+        onUpdateSettings({ projectFilter: [] });
+      }}
       onSelectIncidents={() => setSelectedView("incidents")}
-      onSelectProject={(cwd) => setSelectedView({ projectCwd: cwd })}
+      onSelectProject={(cwd) => {
+        setSelectedView({ projectCwd: cwd });
+        onUpdateSettings({ projectFilter: [cwd] });
+      }}
       projects={projects}
       criticalIncidents={criticalIncidents}
       onSelectIncident={handleSelectIncident}

@@ -1,11 +1,12 @@
-import { execFile } from "node:child_process";
+import { execFile, type ExecFileOptions } from "node:child_process";
+import { constants } from "node:fs";
 import { open, readdir, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
 import path from "node:path";
 import { promisify } from "node:util";
 
 import type { AgentActionRequest, AgentActionResult, AgentActionType } from "@/domain/agent/actions";
-import type { Agent, ProjectRef } from "@/domain/agent/agent";
+import { AgentIdSchema, type Agent, type ProjectRef } from "@/domain/agent/agent";
 import type { AgentStatus, AgentStatusKind } from "@/domain/agent/status";
 import type { DashboardSnapshot, DashboardSummary } from "@/domain/dashboard";
 
@@ -22,15 +23,17 @@ const OBSERVED_IDLE_MS = STALE_HEARTBEAT_THRESHOLD_MS;
 const SNAPSHOT_CACHE_MS = 1_000;
 const ACTIVITY_READ_CONCURRENCY = 4;
 const MAX_EXEC_BUFFER = 8 * 1024 * 1024;
+const MAX_DATE_MS = 8_640_000_000_000_000;
+const SQL_TEXT_LIMIT = 4_096;
 /** Exported so the log reader can report `isTruncated` against the same window it actually read. */
 export const TAIL_BYTES = 640_000;
 const DIFF_OUTPUT_LIMIT = 2_000;
+const CHILD_PROCESS_TIMEOUT_MS = 5_000;
 
 const NO_CONTROL_CHANNEL_MESSAGE =
   "이 모니터는 읽기 전용 관찰자입니다. 외부에서 실행된 세션의 stdin/PTY 제어 채널이 없어 이 동작을 수행할 수 없습니다.";
 
-/** Legacy 6-state classifier vocabulary, preserved verbatim from lib/session-data.mjs. */
-type LegacyStatusKind = "completed" | "working" | "observed" | "waiting" | "stale" | "unknown";
+type LegacyStatusKind = "completed" | "failed" | "working" | "observed" | "waiting" | "stale" | "unknown";
 
 /** Exported so the log reader (local-agent-logs.ts) interprets rollout events through this module. */
 export interface RolloutActivity {
@@ -121,6 +124,15 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
+class NonRegularRolloutError extends Error {
+  override readonly name = "NonRegularRolloutError";
+  readonly code = "EINVAL";
+
+  constructor(readonly filePath: string) {
+    super(`Rollout path is not a regular file: ${filePath}`);
+  }
+}
+
 function asString(value: unknown): string | null {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
@@ -146,13 +158,15 @@ function compactText(value: unknown, maxLength = 220): string {
 /** Codex stores epoch seconds in created_at/updated_at; anything above 10^10 is already milliseconds. */
 function asTimestamp(value: unknown): number | null {
   if (typeof value === "number") {
-    return Number.isFinite(value) ? (value > 10_000_000_000 ? value : value * 1000) : null;
+    const milliseconds = value > 10_000_000_000 ? value : value * 1000;
+    return Number.isFinite(milliseconds) && Math.abs(milliseconds) <= MAX_DATE_MS ? milliseconds : null;
   }
 
   if (typeof value === "string") {
     const numeric = Number(value);
     if (Number.isFinite(numeric) && value.trim() !== "") {
-      return numeric > 10_000_000_000 ? numeric : numeric * 1000;
+      const milliseconds = numeric > 10_000_000_000 ? numeric : numeric * 1000;
+      return Math.abs(milliseconds) <= MAX_DATE_MS ? milliseconds : null;
     }
 
     const parsed = Date.parse(value);
@@ -174,8 +188,24 @@ function stateDbHome(): string {
   return process.env.CODEX_HOME || path.join(homedir(), ".codex");
 }
 
-async function run(command: string, args: string[], options: { cwd?: string } = {}): Promise<string> {
-  const { stdout } = await execFileAsync(command, args, { maxBuffer: MAX_EXEC_BUFFER, ...options });
+type RunExecutor = (
+  command: string,
+  args: readonly string[],
+  options: ExecFileOptions,
+) => Promise<{ stdout: string }>;
+
+export async function run(
+  command: string,
+  args: string[],
+  options: { cwd?: string } = {},
+  execute: RunExecutor = execFileAsync,
+): Promise<string> {
+  const { stdout } = await execute(command, args, {
+    maxBuffer: MAX_EXEC_BUFFER,
+    timeout: CHILD_PROCESS_TIMEOUT_MS,
+    ...options,
+    ...(command === "gh" ? { env: { ...process.env, GH_PROMPT_DISABLED: "1" } } : {}),
+  });
   return stdout;
 }
 
@@ -192,13 +222,21 @@ async function discoverStateDatabase(codexHome: string = stateDbHome()): Promise
       .filter((entry) => /^state_.*\.sqlite$/.test(entry))
       .map(async (entry) => {
         const filePath = path.join(codexHome, entry);
-        const fileStat = await stat(filePath);
-        return { filePath, mtimeMs: fileStat.mtimeMs };
+        try {
+          const fileStat = await stat(filePath);
+          return { filePath, mtimeMs: fileStat.mtimeMs };
+        } catch (error) {
+          if (errorCode(error) === "ENOENT") {
+            return null;
+          }
+          throw error;
+        }
       }),
   );
 
-  candidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
-  return candidates[0]?.filePath ?? null;
+  const existingCandidates = candidates.filter((candidate) => candidate !== null);
+  existingCandidates.sort((left, right) => right.mtimeMs - left.mtimeMs);
+  return existingCandidates[0]?.filePath ?? null;
 }
 
 async function queryJson(databasePath: string, query: string): Promise<Record<string, unknown>[]> {
@@ -264,7 +302,13 @@ export function buildStateQuery(
   workspaceLimits: Map<string, number>,
   now: number,
 ): string {
-  const threadFields = THREAD_COLUMNS.map((column) => selectedColumn(threadColumns, "t", column)).join(", ");
+  const threadFields = THREAD_COLUMNS.map((column) => {
+    if (!threadColumns.has(column)) {
+      return `NULL AS ${column}`;
+    }
+    const value = `t.${column}`;
+    return `SUBSTR(CAST(${value} AS TEXT), 1, ${SQL_TEXT_LIMIT}) AS ${column}`;
+  }).join(", ");
   /** Derived from the same list so the UNION ALL arms can never fall out of column order. */
   const nullThreadFields = THREAD_COLUMNS.map((column) => `NULL AS ${column}`).join(", ");
   const threadVisible = visibleThreadCondition(threadColumns, "t");
@@ -361,21 +405,21 @@ export function buildStateQuery(
     SELECT
       'edge' AS record_type,
       ${nullThreadFields},
-      edge.parent_thread_id,
-      edge.child_thread_id,
-      edge.edge_status
+      SUBSTR(CAST(edge.parent_thread_id AS TEXT), 1, ${SQL_TEXT_LIMIT}) AS parent_thread_id,
+      SUBSTR(CAST(edge.child_thread_id AS TEXT), 1, ${SQL_TEXT_LIMIT}) AS child_thread_id,
+      SUBSTR(CAST(edge.edge_status AS TEXT), 1, ${SQL_TEXT_LIMIT}) AS edge_status
     FROM child_edges edge
     JOIN descendants descendant ON descendant.id = edge.child_thread_id`;
 }
 
 function toThreadRow(record: Record<string, unknown>): ThreadRow | null {
-  const id = asString(record.id);
-  if (!id) {
+  const parsedId = AgentIdSchema.safeParse(record.id);
+  if (!parsedId.success) {
     return null;
   }
 
   return {
-    id,
+    id: parsedId.data,
     rolloutPath: asString(record.rollout_path),
     createdAt: asTimestamp(record.created_at),
     updatedAt: asTimestamp(record.updated_at),
@@ -396,13 +440,13 @@ function toThreadRow(record: Record<string, unknown>): ThreadRow | null {
 }
 
 function toEdgeRow(record: Record<string, unknown>): EdgeRow | null {
-  const parentThreadId = asString(record.parent_thread_id);
-  const childThreadId = asString(record.child_thread_id);
-  if (!parentThreadId || !childThreadId) {
+  const parentThreadId = AgentIdSchema.safeParse(record.parent_thread_id);
+  const childThreadId = AgentIdSchema.safeParse(record.child_thread_id);
+  if (!parentThreadId.success || !childThreadId.success) {
     return null;
   }
 
-  return { parentThreadId, childThreadId, status: asString(record.edge_status) };
+  return { parentThreadId: parentThreadId.data, childThreadId: childThreadId.data, status: asString(record.edge_status) };
 }
 
 interface StateReadResult {
@@ -482,8 +526,13 @@ export function parseProcessRows(stdout: string): Omit<CodexProcess, "cwd">[] {
       continue;
     }
 
+    const numericPid = Number(pid);
+    if (numericPid <= 0 || !isNativeCodexProcess(command)) {
+      continue;
+    }
+
     rows.push({
-      pid: Number(pid),
+      pid: numericPid,
       ppid: Number(ppid),
       state,
       elapsed,
@@ -497,9 +546,7 @@ export function parseProcessRows(stdout: string): Omit<CodexProcess, "cwd">[] {
 }
 
 function isNativeCodexProcess(command: string): boolean {
-  const isCodex = /(?:^|\s|\/)codex(?:\s|$)/.test(command);
-  const isNodeWrapper = /^node\s+.*\/bin\/codex(?:\s|$)/.test(command);
-  return isCodex && !isNodeWrapper && !command.includes("codex-session-monitor");
+  return path.basename(command.trim()) === "codex";
 }
 
 async function getProcessCwd(pid: number): Promise<string | null> {
@@ -515,12 +562,12 @@ async function getProcessCwd(pid: number): Promise<string | null> {
 async function getRunningCodexProcesses(): Promise<CodexProcess[]> {
   let stdout: string;
   try {
-    stdout = await run("ps", ["-Ao", "pid=,ppid=,stat=,etime=,pcpu=,pmem=,command="]);
+    stdout = await run("ps", ["-Ao", "pid=,ppid=,stat=,etime=,pcpu=,pmem=,comm="]);
   } catch {
     return [];
   }
 
-  const candidates = parseProcessRows(stdout).filter((codexProcess) => isNativeCodexProcess(codexProcess.command));
+  const candidates = parseProcessRows(stdout);
   return mapWithConcurrency(candidates, ACTIVITY_READ_CONCURRENCY, async (codexProcess) => ({
     ...codexProcess,
     cwd: await getProcessCwd(codexProcess.pid),
@@ -536,22 +583,23 @@ export async function readTail(filePath: string | null, maxBytes = TAIL_BYTES): 
     return "";
   }
 
+  const handle = await open(filePath, constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK);
   try {
-    const handle = await open(filePath, "r");
-    try {
-      const fileStat = await handle.stat();
-      const length = Math.min(fileStat.size, maxBytes);
-      const buffer = Buffer.alloc(length);
-      await handle.read(buffer, 0, length, Math.max(0, fileStat.size - length));
-      const tail = buffer.toString("utf8");
-      const startsMidRecord = fileStat.size > length;
-      const firstLineEnd = tail.indexOf("\n");
-      return startsMidRecord && firstLineEnd >= 0 ? tail.slice(firstLineEnd + 1) : tail;
-    } finally {
-      await handle.close();
+    const fileStat = await handle.stat();
+    if (!fileStat.isFile()) {
+      throw new NonRegularRolloutError(filePath);
     }
-  } catch {
-    return "";
+    const length = Math.min(fileStat.size, maxBytes);
+    const start = Math.max(0, fileStat.size - length);
+    const prefixLength = start > 0 ? 1 : 0;
+    const buffer = Buffer.alloc(length + prefixLength);
+    await handle.read(buffer, 0, buffer.length, start - prefixLength);
+    const tail = buffer.subarray(prefixLength).toString("utf8");
+    const startsMidRecord = prefixLength === 1 && buffer[0] !== 0x0a;
+    const firstLineEnd = tail.indexOf("\n");
+    return startsMidRecord ? (firstLineEnd >= 0 ? tail.slice(firstLineEnd + 1) : "") : tail;
+  } finally {
+    await handle.close();
   }
 }
 
@@ -591,6 +639,15 @@ export function describeRolloutEvent(entry: Record<string, unknown>): RolloutAct
     const eventType = asString(payload.type) ?? asString(entry.event_type);
     if (eventType === "task_complete") {
       return { kind: "completed", text: "작업 완료 신호", timestamp };
+    }
+
+    if (eventType === "task_started") {
+      return { kind: "running", text: "작업 시작 신호", timestamp };
+    }
+
+    if (eventType === "error") {
+      const text = compactText(asString(payload.message) ?? asString(payload.text) ?? "오류 신호");
+      return { kind: "failed", text, timestamp };
     }
 
     if (eventType === "sub_agent_activity") {
@@ -677,7 +734,7 @@ export function selectLatestActivities(
   return activities;
 }
 
-async function collectLatestActivities(
+export async function collectLatestActivities(
   threadById: ReadonlyMap<string, ThreadRow>,
   selectedIds: ReadonlySet<string>,
 ): Promise<Map<string, RolloutActivity>> {
@@ -688,7 +745,15 @@ async function collectLatestActivities(
         return [];
       }
 
-      const tail = await readTail(thread.rolloutPath);
+      let tail: string;
+      try {
+        tail = await readTail(thread.rolloutPath);
+      } catch (error) {
+        if (!(error instanceof Error)) {
+          throw error;
+        }
+        return [];
+      }
       return activityCandidatesFromTail(tail, thread.id);
     })
   ).flat();
@@ -732,6 +797,10 @@ export function classifyNode(input: {
     return "completed";
   }
 
+  if (activity?.kind === "failed") {
+    return "failed";
+  }
+
   const timestamp = activity?.timestamp ?? null;
   if (timestamp && now - timestamp <= RECENT_ACTIVITY_MS) {
     return "working";
@@ -753,17 +822,18 @@ export function classifyNode(input: {
 }
 
 /**
- * The local adapter can only ever justify five of the nine kinds. blocked/failed/approval_required/
- * paused are never emitted here because the rollout event vocabulary has no error, approval, or
- * pause signal to base them on — see src/domain/agent/status.ts. The mock adapter exercises them.
+ * The local adapter can only justify six of the nine kinds. blocked/approval_required/paused are
+ * never emitted here because the rollout event vocabulary has no evidence for them — see
+ * src/domain/agent/status.ts. The mock adapter exercises them.
  * Narrowing the value type makes that gap a compile-time guarantee rather than a convention.
  */
-type LocalStatusKind = Extract<AgentStatusKind, "running" | "waiting" | "completed" | "stale" | "offline">;
+type LocalStatusKind = Extract<AgentStatusKind, "running" | "waiting" | "failed" | "completed" | "stale" | "offline">;
 
 const LEGACY_TO_STATUS_KIND: Record<LegacyStatusKind, LocalStatusKind> = {
   working: "running",
   observed: "running",
   waiting: "waiting",
+  failed: "failed",
   completed: "completed",
   stale: "stale",
   unknown: "offline",
@@ -787,6 +857,10 @@ function buildAgentStatus(
 
   if (kind === "completed") {
     return { kind, completedAt: toIso(lastKnownMs) };
+  }
+
+  if (kind === "failed") {
+    return { kind, error: "Codex rollout 오류 신호", retryCount: 0, failedAt: toIso(lastKnownMs) };
   }
 
   if (kind === "stale") {
@@ -1129,7 +1203,7 @@ function buildContent(
  * over the union (and, unlike buildSummary, sums the real per-session cost that Claude sessions carry),
  * projects are de-duplicated by cwd across both sources, and incidents are re-detected over everyone.
  */
-function mergeClaudeContent(
+export function mergeClaudeContent(
   codex: SnapshotContent,
   claude: readonly Agent[],
   claudeWarnings: string[],
@@ -1170,13 +1244,12 @@ function mergeClaudeContent(
     stale: 0,
     offline: 0,
   };
-  let sessionCostUsd: number | null = null;
   for (const agent of agents) {
     statusCounts[agent.status.kind] += 1;
-    if (agent.costUsd !== null) {
-      sessionCostUsd = (sessionCostUsd ?? 0) + agent.costUsd;
-    }
   }
+  const sessionCostUsd = claude.some((agent) => agent.costUsd === null)
+    ? null
+    : Number(claude.reduce((total, agent) => total + (agent.costUsd ?? 0), 0).toFixed(2));
 
   return {
     byId,
@@ -1187,7 +1260,7 @@ function mergeClaudeContent(
       totalAgents: agents.length,
       activeProjects: projects.length,
       statusCounts,
-      sessionCostUsd: sessionCostUsd === null ? null : Number(sessionCostUsd.toFixed(2)),
+      sessionCostUsd,
     },
     warnings: [...codex.warnings, ...claudeWarnings],
   };
@@ -1241,9 +1314,12 @@ async function buildDashboardSnapshot(now: number): Promise<DashboardSnapshot> {
 }
 
 /** 1s cache + in-flight dedup: concurrent callers share one read of the state DB and rollout logs. */
-async function getSnapshot(): Promise<DashboardSnapshot> {
+type SnapshotBuilder = (now: number) => Promise<DashboardSnapshot>;
+
+export async function getSnapshot(buildSnapshot: SnapshotBuilder = buildDashboardSnapshot): Promise<DashboardSnapshot> {
   const now = Date.now();
-  if (cachedSnapshot && now - cachedSnapshotAt < SNAPSHOT_CACHE_MS) {
+  const cacheAge = now - cachedSnapshotAt;
+  if (cachedSnapshot && cacheAge >= 0 && cacheAge < SNAPSHOT_CACHE_MS) {
     return cachedSnapshot;
   }
 
@@ -1251,7 +1327,7 @@ async function getSnapshot(): Promise<DashboardSnapshot> {
     return snapshotInFlight;
   }
 
-  snapshotInFlight = buildDashboardSnapshot(now)
+  snapshotInFlight = buildSnapshot(now)
     .then((snapshot) => {
       cachedSnapshot = snapshot;
       cachedSnapshotAt = Date.now();
@@ -1271,6 +1347,8 @@ type ActionOutcome = Omit<AgentActionResult, "agentId" | "action">;
 interface ActionContext {
   agent: Agent;
   force: boolean;
+  handledPids: Set<number> | undefined;
+  runCommand?: typeof run;
 }
 
 function truncate(value: string, maxLength: number): string {
@@ -1282,8 +1360,40 @@ function truncate(value: string, maxLength: number): string {
  * working directory (see README). Signalling therefore affects every session in that directory —
  * the message says so rather than pretending the signal was precisely targeted.
  */
-async function signalAgentProcesses(agent: Agent, signal: NodeJS.Signals, label: string): Promise<ActionOutcome> {
-  const pids = agent.runtimePids;
+export async function signalAgentProcesses(
+  agent: Agent,
+  signal: NodeJS.Signals,
+  label: string,
+  currentProcesses?: readonly CodexProcess[],
+  handledPids: Set<number> = new Set(),
+): Promise<ActionOutcome> {
+  const canonicalCwd = await resolveWorkingDirectory(agent);
+  const refreshedProcesses = currentProcesses ?? (await getRunningCodexProcesses());
+  const snapshotPids = new Set(agent.runtimePids.filter((pid) => pid > 0));
+  const matchingPids = new Set<number>();
+  for (const codexProcess of refreshedProcesses) {
+    if (!snapshotPids.has(codexProcess.pid) || handledPids.has(codexProcess.pid) || !codexProcess.cwd) {
+      continue;
+    }
+
+    try {
+      if ((await realpath(codexProcess.cwd)) === canonicalCwd) {
+        matchingPids.add(codexProcess.pid);
+      }
+    } catch (error) {
+      if (!(error instanceof Error)) {
+        throw error;
+      }
+    }
+  }
+
+  const pids: number[] = [];
+  for (const pid of matchingPids) {
+    if (!handledPids.has(pid)) {
+      handledPids.add(pid);
+      pids.push(pid);
+    }
+  }
   if (pids.length === 0) {
     return { status: "skipped", message: "실행 중인 프로세스를 찾지 못했습니다." };
   }
@@ -1346,11 +1456,18 @@ async function resolveWorkingDirectory(agent: Agent): Promise<string> {
   return canonical;
 }
 
-const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promise<ActionOutcome>> = {
-  stop: ({ agent, force }) => signalAgentProcesses(agent, force ? "SIGKILL" : "SIGTERM", force ? "SIGKILL" : "SIGTERM"),
+export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promise<ActionOutcome>> = {
+  stop: ({ agent, force, handledPids }) =>
+    signalAgentProcesses(
+      agent,
+      force ? "SIGKILL" : "SIGTERM",
+      force ? "SIGKILL" : "SIGTERM",
+      undefined,
+      handledPids,
+    ),
 
-  pause: async ({ agent }) => {
-    const outcome = await signalAgentProcesses(agent, "SIGSTOP", "SIGSTOP");
+  pause: async ({ agent, handledPids }) => {
+    const outcome = await signalAgentProcesses(agent, "SIGSTOP", "SIGSTOP", undefined, handledPids);
     if (outcome.status !== "success") {
       return outcome;
     }
@@ -1360,8 +1477,8 @@ const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promi
     };
   },
 
-  resume: async ({ agent }) => {
-    const outcome = await signalAgentProcesses(agent, "SIGCONT", "SIGCONT");
+  resume: async ({ agent, handledPids }) => {
+    const outcome = await signalAgentProcesses(agent, "SIGCONT", "SIGCONT", undefined, handledPids);
     if (outcome.status !== "success") {
       return outcome;
     }
@@ -1378,18 +1495,18 @@ const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promi
   open_terminal: async ({ agent }) => {
     try {
       const cwd = await resolveWorkingDirectory(agent);
-      await execFileAsync("open", ["-a", "Terminal", cwd], { maxBuffer: MAX_EXEC_BUFFER });
+      await run("open", ["-a", "Terminal", cwd]);
       return { status: "success", message: `터미널에서 ${cwd}를 열었습니다.` };
     } catch (error) {
       return { status: "failed", message: `터미널을 열지 못했습니다: ${errorMessage(error)}` };
     }
   },
 
-  view_diff: async ({ agent }) => {
+  view_diff: async ({ agent, runCommand = run }) => {
     try {
       const cwd = await resolveWorkingDirectory(agent);
-      const { stdout } = await execFileAsync("git", ["-C", cwd, "diff", "--stat"], { maxBuffer: MAX_EXEC_BUFFER });
-      const output = stdout.trim();
+      const stdout = await runCommand("git", ["-C", cwd, "status", "--short"]);
+      const output = stdout.trimEnd();
       return {
         status: "success",
         message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "변경 사항이 없습니다.",
@@ -1399,10 +1516,10 @@ const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promi
     }
   },
 
-  create_pr: async ({ agent }) => {
+  create_pr: async ({ agent, runCommand = run }) => {
     try {
       const cwd = await resolveWorkingDirectory(agent);
-      const { stdout } = await execFileAsync("gh", ["pr", "create", "--fill"], { cwd, maxBuffer: MAX_EXEC_BUFFER });
+      const stdout = await runCommand("gh", ["pr", "create", "--fill"], { cwd });
       const output = stdout.trim();
       return { status: "success", message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "PR을 생성했습니다." };
     } catch (error) {
@@ -1410,10 +1527,10 @@ const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promi
     }
   },
 
-  open_pr: async ({ agent }) => {
+  open_pr: async ({ agent, runCommand = run }) => {
     try {
       const cwd = await resolveWorkingDirectory(agent);
-      await execFileAsync("gh", ["pr", "view", "--web"], { cwd, maxBuffer: MAX_EXEC_BUFFER });
+      await runCommand("gh", ["pr", "view", "--web"], { cwd });
       return { status: "success", message: "브라우저에서 PR을 열었습니다." };
     } catch (error) {
       return { status: "failed", message: `PR을 열지 못했습니다: ${errorMessage(error)}` };
@@ -1421,7 +1538,11 @@ const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) => Promi
   },
 };
 
-async function execute(agentId: string, request: AgentActionRequest): Promise<AgentActionResult> {
+async function execute(
+  agentId: string,
+  request: AgentActionRequest,
+  handledPids?: Set<number>,
+): Promise<AgentActionResult> {
   const snapshot = await getSnapshot();
   const agent = snapshot.byId[agentId];
   if (!agent) {
@@ -1429,7 +1550,7 @@ async function execute(agentId: string, request: AgentActionRequest): Promise<Ag
   }
 
   try {
-    const outcome = await ACTION_HANDLERS[request.action]({ agent, force: request.force ?? false });
+    const outcome = await ACTION_HANDLERS[request.action]({ agent, force: request.force ?? false, handledPids });
     return { agentId, action: request.action, ...outcome };
   } catch (error) {
     return { agentId, action: request.action, status: "failed", message: errorMessage(error) };
@@ -1439,9 +1560,10 @@ async function execute(agentId: string, request: AgentActionRequest): Promise<Ag
 /** Sequential so one agent's failure never aborts the batch and the result order matches the input. */
 async function executeBulk(agentIds: string[], action: AgentActionType, force?: boolean): Promise<AgentActionResult[]> {
   const results: AgentActionResult[] = [];
+  const handledPids = new Set<number>();
 
   for (const agentId of agentIds) {
-    results.push(await execute(agentId, force === undefined ? { action } : { action, force }));
+    results.push(await execute(agentId, force === undefined ? { action } : { action, force }, handledPids));
   }
 
   return results;

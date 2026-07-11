@@ -1,7 +1,7 @@
 /**
  * Claude API token pricing, in US dollars per one million tokens.
  *
- * Source: https://platform.claude.com/docs/en/about-claude/pricing (fetched 2026-07-10).
+ * Source: https://platform.claude.com/docs/en/about-claude/pricing (fetched 2026-07-11).
  * This is a maintained, sourced fact table — update the rates here when Anthropic changes them,
  * not inside the adapter logic. Every rate below is verbatim from that page on that date.
  *
@@ -31,7 +31,11 @@ export const CLAUDE_MODEL_RATES: Record<string, ModelRates> = {
    * encoded as a date-conditional switch here (out of scope); update these numbers when it changes.
    */
   "claude-sonnet-5": { input: 2, cacheWrite5m: 2.5, cacheWrite1h: 4, cacheRead: 0.2, output: 10 },
+  "claude-fable-5": { input: 10, cacheWrite5m: 12.5, cacheWrite1h: 20, cacheRead: 1, output: 50 },
   "claude-opus-4-8": { input: 5, cacheWrite5m: 6.25, cacheWrite1h: 10, cacheRead: 0.5, output: 25 },
+  "claude-sonnet-4-6": { input: 3, cacheWrite5m: 3.75, cacheWrite1h: 6, cacheRead: 0.3, output: 15 },
+  "claude-haiku-4-5": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
+  "claude-haiku-4-5-20251001": { input: 1, cacheWrite5m: 1.25, cacheWrite1h: 2, cacheRead: 0.1, output: 5 },
 };
 
 export function ratesForModel(model: string | null): ModelRates | null {

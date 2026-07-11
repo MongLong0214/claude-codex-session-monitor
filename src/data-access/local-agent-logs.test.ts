@@ -1,5 +1,14 @@
-import { describe, expect, it } from "vitest";
-import { logLinesFromTail } from "./local-agent-logs";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
+
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+import type { Agent } from "@/domain/agent/agent";
+import type { DashboardSnapshot } from "@/domain/dashboard";
+
+import { localDashboardRepository } from "./local-adapter";
+import { localAgentLogRepository, logLinesFromTail } from "./local-agent-logs";
 
 /** Shapes copied from real rollout JSONL lines on this machine, not invented. */
 function rolloutLine(entry: unknown): string {
@@ -36,6 +45,66 @@ const TOKEN_COUNT = rolloutLine({
   type: "event_msg",
   payload: { type: "token_count" },
 });
+
+const cleanups: Array<() => Promise<void>> = [];
+
+afterEach(async () => {
+  await Promise.all(cleanups.splice(0).map((cleanup) => cleanup()));
+  vi.restoreAllMocks();
+});
+
+function snapshotWithRolloutPath(rolloutPath: string): DashboardSnapshot {
+  const timestamp = "2026-07-10T07:47:46.378Z";
+  const agent: Agent = {
+    id: "missing-rollout",
+    displayName: "missing-rollout",
+    source: "codex",
+    role: "main",
+    project: { cwd: path.dirname(rolloutPath), name: "missing", repoUrl: null },
+    branch: null,
+    commitSha: null,
+    model: null,
+    reasoningEffort: null,
+    status: { kind: "running", startedAt: timestamp, lastHeartbeatAt: timestamp },
+    currentTask: null,
+    tokensUsed: 0,
+    costUsd: null,
+    startedAt: timestamp,
+    updatedAt: timestamp,
+    lastHeartbeatAt: timestamp,
+    runtimePids: [],
+    parentId: null,
+    childIds: [],
+    cliVersion: null,
+    approvalMode: null,
+    rolloutPath,
+  };
+  return {
+    byId: { [agent.id]: agent },
+    allIds: [agent.id],
+    projects: [agent.project],
+    incidents: [],
+    summary: {
+      totalAgents: 1,
+      activeProjects: 1,
+      statusCounts: {
+        running: 1,
+        waiting: 0,
+        approval_required: 0,
+        blocked: 0,
+        failed: 0,
+        completed: 0,
+        paused: 0,
+        stale: 0,
+        offline: 0,
+      },
+      sessionCostUsd: null,
+    },
+    warnings: [],
+    revision: 1,
+    lastSyncedAt: timestamp,
+  };
+}
 
 describe("logLinesFromTail", () => {
   it("keeps chronological order and maps events through describeRolloutEvent", () => {
@@ -80,7 +149,37 @@ describe("logLinesFromTail", () => {
     expect(new Set(lines.map((line) => line.id)).size).toBe(2);
   });
 
+  it("assigns same-timestamp ids before slicing so a sliding limit preserves identities", () => {
+    const messages = ["첫 번째", "두 번째", "세 번째"].map((message) =>
+      rolloutLine({
+        timestamp: "2026-07-10T07:47:46.378Z",
+        type: "event_msg",
+        payload: { type: "agent_message", message },
+      }),
+    );
+
+    const { lines } = logLinesFromTail(messages.join("\n"), 2);
+
+    expect(lines.map((line) => line.id)).toEqual([
+      "2026-07-10T07:47:46.378Z#1",
+      "2026-07-10T07:47:46.378Z#2",
+    ]);
+  });
+
   it("returns nothing for an empty tail", () => {
     expect(logLinesFromTail("", 500)).toEqual({ lines: [], droppedCount: 0 });
+  });
+});
+
+describe("localAgentLogRepository", () => {
+  it("rejects a vanished rollout file instead of reporting an empty log", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "missing-rollout-"));
+    cleanups.push(() => rm(directory, { force: true, recursive: true }));
+    const missingPath = path.join(directory, "rollout.jsonl");
+    vi.spyOn(localDashboardRepository, "getSnapshot").mockResolvedValue(snapshotWithRolloutPath(missingPath));
+
+    const read = localAgentLogRepository.readLines("missing-rollout", 500);
+
+    await expect(read).rejects.toMatchObject({ code: "ENOENT" });
   });
 });

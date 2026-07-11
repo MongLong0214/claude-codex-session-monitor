@@ -24,6 +24,26 @@ const COLUMN_SIZING_PERSIST_DEBOUNCE_MS = 200;
 /** Elapsed-time cells re-derive from this; a minute is finer than the column's own resolution. */
 const NOW_TICK_MS = 30_000;
 
+function arePersistedSlicesEqual(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) {
+    return true;
+  }
+  if (Array.isArray(left) && Array.isArray(right)) {
+    return left.length === right.length && left.every((value, index) => arePersistedSlicesEqual(value, right[index]));
+  }
+  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null) {
+    return false;
+  }
+
+  const keys = Object.keys(left);
+  return (
+    keys.length === Object.keys(right).length &&
+    keys.every(
+      (key) => Object.hasOwn(right, key) && arePersistedSlicesEqual(Reflect.get(left, key), Reflect.get(right, key)),
+    )
+  );
+}
+
 /**
  * A ticking clock, hoisted so a virtualized row never owns an interval. The container re-renders
  * twice a minute and hands rows a new `nowMs`; a realtime event does not change it, so `memo()`
@@ -67,11 +87,10 @@ export interface AgentTableState {
 
 export interface UseAgentTableStateOptions {
   /**
-   * Persisted values to seed the state from, captured once as the `useState` initializers. The
-   * caller is responsible for only mounting this hook after settings have hydrated (see
-   * DashboardApp), so these are the real stored values, not the pre-hydration defaults.
+   * Persisted values seed the state after hydration and reconcile later storage changes without
+   * invoking `onPersist` again.
    */
-  initialState?: PersistedTableState;
+  persistedState?: PersistedTableState;
   /**
    * Invoked whenever a persisted slice changes, with a patch already reshaped to DashboardSettings.
    * The search text and row selection are intentionally transient and never reach this callback.
@@ -82,12 +101,12 @@ export interface UseAgentTableStateOptions {
 /**
  * All table-local state in one place. Every persisted slice mirrors its `domain/settings.ts`
  * counterpart (`rowDensity`, `visibleColumns`, `columnWidths`, `sort`, and the three filter
- * arrays); `initialState` hydrates them and each setter is wrapped to push the change back out
+ * arrays); `persistedState` hydrates and reconciles them, and each setter pushes user changes out
  * through `onPersist`. Column widths persist on a debounce because their setter fires on every
  * frame of a resize drag; every other slice persists on its discrete user action.
  */
 export function useAgentTableState(options: UseAgentTableStateOptions = {}): AgentTableState {
-  const { initialState, onPersist } = options;
+  const { persistedState, onPersist } = options;
 
   // Kept in a ref so the wrapped setters stay referentially stable (react-table compares them).
   const onPersistRef = useRef(onPersist);
@@ -97,24 +116,62 @@ export function useAgentTableState(options: UseAgentTableStateOptions = {}): Age
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
-  const [statusKinds, setStatusKindsState] = useState<AgentStatusKind[]>(initialState?.statusKinds ?? []);
-  const [projectCwds, setProjectCwdsState] = useState<string[]>(initialState?.projectCwds ?? []);
-  const [branches, setBranchesState] = useState<string[]>(initialState?.branches ?? []);
+  const [statusKinds, setStatusKindsState] = useState<AgentStatusKind[]>(persistedState?.statusKinds ?? []);
+  const [projectCwds, setProjectCwdsState] = useState<string[]>(persistedState?.projectCwds ?? []);
+  const [branches, setBranchesState] = useState<string[]>(persistedState?.branches ?? []);
 
   const [density, setDensityState] = useState<RowDensity>(
-    initialState?.density ?? DEFAULT_DASHBOARD_SETTINGS.rowDensity,
+    persistedState?.density ?? DEFAULT_DASHBOARD_SETTINGS.rowDensity,
   );
-  const [sorting, setSortingState] = useState<SortingState>(initialState?.sorting ?? []);
+  const [sorting, setSortingState] = useState<SortingState>(persistedState?.sorting ?? []);
   const [columnVisibility, setColumnVisibilityState] = useState<VisibilityState>(
-    initialState?.columnVisibility ?? DEFAULT_COLUMN_VISIBILITY,
+    persistedState?.columnVisibility ?? DEFAULT_COLUMN_VISIBILITY,
   );
-  const [columnSizing, setColumnSizing] = useState<ColumnSizingState>(initialState?.columnSizing ?? {});
+  const [columnSizing, setColumnSizingState] = useState<ColumnSizingState>(persistedState?.columnSizing ?? {});
   const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+
+  const [externallySyncedColumnSizing, setExternallySyncedColumnSizing] = useState<ColumnSizingState | null>(null);
+  const [lastPersistedState, setLastPersistedState] = useState(persistedState);
+  if (persistedState !== lastPersistedState) {
+    const previous = lastPersistedState;
+    setLastPersistedState(persistedState);
+    if (persistedState) {
+      if (!previous || previous.density !== persistedState.density) {
+        setDensityState(persistedState.density);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.statusKinds, persistedState.statusKinds)) {
+        setStatusKindsState(persistedState.statusKinds);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.projectCwds, persistedState.projectCwds)) {
+        setProjectCwdsState(persistedState.projectCwds);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.branches, persistedState.branches)) {
+        setBranchesState(persistedState.branches);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.sorting, persistedState.sorting)) {
+        setSortingState(persistedState.sorting);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.columnVisibility, persistedState.columnVisibility)) {
+        setColumnVisibilityState(persistedState.columnVisibility);
+      }
+      if (!previous || !arePersistedSlicesEqual(previous.columnSizing, persistedState.columnSizing)) {
+        setExternallySyncedColumnSizing(persistedState.columnSizing);
+        if (!arePersistedSlicesEqual(columnSizing, persistedState.columnSizing)) {
+          setColumnSizingState(persistedState.columnSizing);
+        }
+      }
+    }
+  }
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
     return () => window.clearTimeout(timeoutId);
   }, [searchInput]);
+
+  const externalColumnSizingEchoRef = useRef<ColumnSizingState | null>(null);
+  useEffect(() => {
+    externalColumnSizingEchoRef.current = externallySyncedColumnSizing;
+  }, [externallySyncedColumnSizing]);
 
   // Skips the mount pass (the seeded value is already persisted) so a plain page load never writes.
   const hasColumnSizingSettledRef = useRef(false);
@@ -123,12 +180,20 @@ export function useAgentTableState(options: UseAgentTableStateOptions = {}): Age
       hasColumnSizingSettledRef.current = true;
       return;
     }
+    if (
+      externalColumnSizingEchoRef.current !== null &&
+      arePersistedSlicesEqual(externalColumnSizingEchoRef.current, columnSizing)
+    ) {
+      externalColumnSizingEchoRef.current = null;
+      return;
+    }
+    externalColumnSizingEchoRef.current = null;
     const timeoutId = window.setTimeout(
       () => onPersistRef.current?.({ columnWidths: columnSizing }),
       COLUMN_SIZING_PERSIST_DEBOUNCE_MS,
     );
     return () => window.clearTimeout(timeoutId);
-  }, [columnSizing]);
+  }, [columnSizing, externallySyncedColumnSizing]);
 
   const setStatusKinds = useCallback((next: AgentStatusKind[]) => {
     setStatusKindsState(next);
@@ -199,7 +264,7 @@ export function useAgentTableState(options: UseAgentTableStateOptions = {}): Age
     columnVisibility,
     setColumnVisibility,
     columnSizing,
-    setColumnSizing,
+    setColumnSizing: setColumnSizingState,
     rowSelection,
     setRowSelection,
   };

@@ -13,7 +13,7 @@ import type { Agent } from "@/domain/agent/agent";
 import { useAgentAction } from "@/lib/query/use-agent-action";
 import { resolveActionAvailability } from "./action-availability";
 
-/** `git diff --stat` output, already truncated server-side. "변경 사항이 없습니다." is a success too. */
+/** Read-only `git status --short` output, already truncated server-side. "변경 사항이 없습니다." is a success too. */
 function DiffOutput({ result }: { result: AgentActionResult }) {
   if (result.status === "success") {
     return <CodeBlock code={result.message} language="plaintext" container="section" width="100%" size="sm" isWrapped maxHeight={360} />;
@@ -30,9 +30,9 @@ function DiffOutput({ result }: { result: AgentActionResult }) {
 }
 
 /**
- * There is no live diff feed and no GET endpoint for one: `view_diff` runs `git diff --stat` in the
- * agent's cwd on demand and answers through the action result. What renders below is therefore a
- * point-in-time snapshot, taken when this tab opened or when the user pressed 새로고침.
+ * There is no live working-tree feed or GET endpoint for one: `view_diff` runs read-only
+ * `git status --short` in the agent's cwd and answers through the action result. What renders below
+ * is therefore a point-in-time snapshot, taken when this tab opened or the user pressed 새로고침.
  */
 export function ChangesTab({ agent }: { agent: Agent }) {
   const diff = useAgentAction();
@@ -85,7 +85,8 @@ export function ChangesTab({ agent }: { agent: Agent }) {
       </HStack>
 
       <Text type="supporting" as="p">
-        {agent.branch ? `브랜치 ${agent.branch}의 ` : ""}git diff --stat 결과입니다. 실시간으로 갱신되지 않습니다.
+        {agent.branch ? `브랜치 ${agent.branch} ` : ""}작업 트리의 git status --short 결과입니다. 조회 시점의 상태이며 실시간으로
+        갱신되지 않습니다.
       </Text>
 
       {/* gh can be missing, unauthenticated, or have nothing to PR — surface its real message. */}
@@ -105,13 +106,13 @@ export function ChangesTab({ agent }: { agent: Agent }) {
       {diff.isPending ? <Spinner size="md" label="변경 사항을 읽는 중" /> : null}
 
       {diff.error ? (
-        <Banner container="section" status="error" title="diff를 불러오지 못했습니다" description={diff.error.message} />
+        <Banner container="section" status="error" title="작업 트리 상태를 불러오지 못했습니다" description={diff.error.message} />
       ) : null}
 
       {diff.data && !diff.isPending && !diff.error ? <DiffOutput result={diff.data} /> : null}
 
       {!diff.data && !diff.isPending && !diff.error ? (
-        <EmptyState isCompact title="변경 사항을 불러오지 않았습니다" description="새로고침을 눌러 현재 git diff를 확인하세요." />
+        <EmptyState isCompact title="변경 사항을 불러오지 않았습니다" description="새로고침을 눌러 현재 작업 트리 상태를 확인하세요." />
       ) : null}
     </VStack>
   );

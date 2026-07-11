@@ -40,7 +40,8 @@ export interface TailLogLines {
  * is the honest answer, not a gap to paper over with raw JSON dumps.
  */
 export function logLinesFromTail(tail: string, limit: number): TailLogLines {
-  const activities: { timestamp: string | null; text: string }[] = [];
+  const activities: { id: string; timestamp: string | null; text: string }[] = [];
+  const seenAt = new Map<string, number>();
 
   for (const line of tail.split("\n")) {
     if (!line) {
@@ -64,18 +65,19 @@ export function logLinesFromTail(tail: string, limit: number): TailLogLines {
       continue;
     }
 
+    const timestamp = activity.timestamp === null ? null : new Date(activity.timestamp).toISOString();
     activities.push({
-      timestamp: activity.timestamp === null ? null : new Date(activity.timestamp).toISOString(),
+      id: nextId(timestamp, seenAt),
+      timestamp,
       text: activity.text,
     });
   }
 
   const kept = activities.slice(-limit);
-  const seenAt = new Map<string, number>();
 
   return {
     lines: kept.map((activity) => ({
-      id: nextId(activity.timestamp, seenAt),
+      id: activity.id,
       timestamp: activity.timestamp,
       level: LOCAL_LOG_LEVEL,
       text: activity.text,

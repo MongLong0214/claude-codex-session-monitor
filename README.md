@@ -1,94 +1,123 @@
 # Agent Session Monitor
 
-A local-only operations dashboard for watching and lightly controlling AI coding-agent sessions — **Codex CLI** and **Claude Code** — running on your own machine. One page, real-time, no login, no server beyond `127.0.0.1`.
+A local dashboard for watching Codex CLI and Claude Code sessions on macOS.
 
-It reads Codex's local SQLite state DB and Claude Code's local JSONL session transcripts directly off disk, cross-references live OS processes, and never talks to any external service beyond the AI provider APIs those CLIs already use on their own. Nothing here requires an account, a cloud backend, or your session data leaving your machine.
+## What is this?
 
-## Why
+Agent Session Monitor shows your local coding-agent sessions on one page. It reads Codex's local SQLite database, reads Claude Code's local JSON Lines (JSONL) transcript files, and checks local operating system processes. It runs without a login or cloud backend, and it does not send your session data to an added external service.
 
-Running several Codex/Claude Code sessions across several projects at once makes it easy to lose track of what's actually happening: which session failed, which is stuck waiting, which one is quietly burning tokens. This dashboard puts all of it in one table, sorted worst-first, updated in real time.
+## Why you might want it
+
+It can be hard to track many sessions across many projects. One session may fail. Another may wait for input or keep using tokens.
+
+This dashboard puts the sessions in one table. It sorts the sessions with the worst state first. It updates the table as local session data changes.
 
 ## Features
 
-- **Multi-source** — Codex CLI and Claude Code sessions in one unified, virtualized table, each row tagged with its real source.
-- **Real-time** — initial state over HTTP, incremental updates over Server-Sent Events, with reconnect/backoff, sequence-gap detection, and automatic resync on reconnect. Not client-side polling.
-- **Built for scale** — TanStack Table + Virtual, sticky core columns, resizable columns, compact/comfortable density, roving-tabindex keyboard navigation, bulk selection and bulk actions. Row updates are reference-isolated: one agent changing never re-renders another agent's row.
-- **Detail panel** — Overview / Logs / Changes tabs per agent, resizable 380–520px, with a real, tail-bounded log view backed by each source's own transcript format.
-- **Real cost, only where it's real** — Claude Code sessions carry real per-message token usage, priced against Anthropic's actual published rates. Codex sessions show `—` for cost, because Codex's local state genuinely has no pricing data. Nothing here is a guessed number, and neither is the progress column: there's no percent-complete signal from either tool, so it's an honest indeterminate indicator, never a fabricated percentage.
-- **Honest action set** — Stop, Pause/Resume (OS-level `SIGTERM`/`SIGSTOP`/`SIGCONT`), Open Terminal, View Working-Tree Changes (a point-in-time, read-only `git status --short` snapshot), and Create/Open PR are real. Retry, Approve, and Reject are disabled with the actual reason shown: this tool observes externally-launched sessions read-only and has no stdin/PTY channel into them.
-- **Command palette** (`Cmd/Ctrl+K`) — search agents, projects, and branches; open a detail panel; act on whichever agent's panel is open; change theme or density. `/` focuses the table search directly.
-- **Persisted, per-device UI state** — theme, density, column layout, filters, and sort survive a reload via localStorage, validated and versioned so a corrupted or stale value never breaks the dashboard.
-- **Local-only security** — binds `127.0.0.1` only, validates the exact canonical local `Host`/`Origin` on every API request, and uses `execFile` with argument arrays (never shell strings). Claude transcript paths are canonicalized within configured roots; log paths are snapshot-owned, and action working directories are snapshot-owned and revalidated before use.
-- **Accessible** — semantic HTML throughout, no incomplete ARIA grid, verified with `@axe-core/playwright` against the loaded dashboard and the open detail panel (zero violations), real keyboard-navigation and light/dark contrast checks.
+- **One session table.** See Codex CLI and Claude Code sessions together. Each row shows its source.
+- **Live updates.** The first state uses HTTP, and later updates use SSE (Server-Sent Events, a way for the server to push live updates to your browser). The server polls the local tools and compares their state because the tools do not provide their own push updates.
+- **A table for many rows.** The table only renders the rows that are visible. It has sticky main columns, resizable columns, two density options, keyboard navigation, bulk selection, and bulk actions.
+- **Session details.** Open the Overview, Logs, or Changes tab for a session. The log view reads only a limited tail of the source transcript, not the full log.
+- **Honest cost.** Claude Code cost uses recorded per-message token data and Anthropic's published rates. Codex cost is always `—` because its local state has no pricing data.
+- **Honest progress.** Running progress is indeterminate because neither tool provides a percent-complete value.
+- **Available actions.** Stop, Pause, and Resume use operating system signals when the app finds a real process. You can also open a terminal and create or open a pull request.
+- **Read-only changes.** View Diff is only a read-only, point-in-time `git status --short` snapshot.
+- **Disabled actions.** Retry, Approve, and Reject are disabled. The app has no stdin or terminal control channel for sessions that started outside the app.
+- **Fast navigation.** Press `Cmd/Ctrl+K` to search sessions, projects, and branches. Use it to open details, run an available action, or change display settings, and press `/` to focus the table search.
+- **Saved local settings.** Theme, density, columns, filters, and sorting stay on the same device after a reload. The app validates and versions this local data before it uses it.
+- **Accessibility checks.** The interface uses semantic HTML and keyboard navigation. Automated checks cover the dashboard, the detail panel, and light and dark contrast.
 
-## Getting started
+## Quick Start
 
 ### Requirements
 
-- Node.js 24 (see `.nvmrc`)
-- pnpm 11 (via Corepack)
-- macOS — process discovery uses `ps`/`lsof`, and Codex reads shell out to the `sqlite3` CLI
-- [Codex CLI](https://github.com/openai/codex) and/or [Claude Code](https://claude.com/claude-code), used at least once, so there's real local session data to show
+- Node.js 24, as listed in `.nvmrc`
+- pnpm 11 through Corepack
+- macOS
+- [Codex CLI](https://github.com/openai/codex) and/or [Claude Code](https://claude.com/claude-code), used at least once
 
-### Install & run
+Process discovery uses `ps` and `lsof`. Reading Codex data also uses the `sqlite3` command-line tool.
+
+### 1. Install
 
 ```bash
 corepack enable
 pnpm install
+```
+
+### 2. Run
+
+```bash
 pnpm dev
 ```
 
-Open the local address printed in the terminal (`http://127.0.0.1:3000` by default). The dashboard reflects whatever Codex/Claude Code sessions are actually on your machine — there's no seed data to load, and nothing to configure.
+### 3. Open
 
-### Scripts
+Open the local address printed in the terminal. The default address is `http://127.0.0.1:3000`.
 
-| Script | What it does |
-| --- | --- |
-| `pnpm dev` | Start the dev server (Turbopack, bound to `127.0.0.1`) |
-| `pnpm build` | Production build |
-| `pnpm start` | Run the production build (bound to `127.0.0.1`) |
-| `pnpm typecheck` | `tsc --noEmit` |
-| `pnpm lint` | ESLint (flat config) |
-| `pnpm test:vitest` | Unit + component tests (Vitest + React Testing Library) |
-| `pnpm test:e2e` | Playwright end-to-end tests, including accessibility checks |
-| `pnpm astryx` | Astryx design-system CLI (component docs, tokens, themes) |
+The dashboard uses the real local session data on your machine. There is no seed data to load and nothing else to configure.
 
-## Architecture
+## How it works
 
-```
+### Architecture
+
+```text
 src/
   app/                 Next.js App Router: pages + API route handlers
-  domain/              Zod schemas + inferred types — the single source of truth for shapes
+  domain/              Zod schemas + inferred types: the shared data shapes
   data-access/         Codex adapter, Claude Code adapter, mock adapter, command execution
   lib/query/           Normalized TanStack Query cache + realtime event reducer
-  lib/realtime/        SSE transport (reconnect, backoff, sequence-gap detection)
-  lib/settings/        localStorage-backed persisted UI settings
+  lib/realtime/        SSE transport: reconnect, backoff, sequence-gap detection
+  lib/settings/        localStorage-backed saved UI settings
   features/dashboard/  App shell, operations table, detail panel, command palette
 ```
 
-- **Server state** lives entirely in a normalized TanStack Query cache (`byId` / `allIds` / `summary`), kept in sync by a pure, reference-preserving reducer applying realtime events — an update to one agent never re-renders rows for every other agent.
-- **Initial load** is a plain HTTP snapshot (`GET /api/dashboard/snapshot`); **live updates** arrive over SSE (`GET /api/dashboard/events`) as a poll-and-diff bridge — Codex and Claude Code have no push capability of their own, so this is an honest adaptation, not a simulated one; **commands** are plain HTTP POSTs (`POST /api/agents/[agentId]/actions`, `POST /api/agents/bulk-actions`).
-- **UI** is built on [Astryx](https://astryx.atmeta.com) (Neutral theme) for the app shell, navigation, forms, dialogs, and overlays, plus [TanStack Table](https://tanstack.com/table) + [TanStack Virtual](https://tanstack.com/virtual) for the operations table specifically — Astryx's own `Table` component is meant for small, non-virtualized data and isn't used for the main table.
-- **Local UI state** (selection, open panels, dialog state) lives in plain React state; **persisted settings** (theme, density, columns, filters, sort) live in a `useSyncExternalStore`-backed localStorage hook — the two are never mixed into the same object.
+Zod is a library that checks data shapes. A normalized cache stores each session once by its ID.
 
-## Known limitations
+### Data flow
 
-- **No progress percentage.** Neither Codex nor Claude Code expose a percent-complete signal. The progress indicator shows indeterminate while running and full when complete — never a fabricated number.
-- **Codex cost is always `—`.** Codex's local state has no pricing data. This is expected, not a bug.
-- **Process control for Claude Code sessions is limited.** Claude Code sessions have no reliable OS-process correlation in most environments, so Stop/Pause/Resume are only available for agents with a real, observed PID (in practice, usually Codex-sourced ones).
-- **Retry/Approve/Reject never do anything.** This tool is a read-only observer of externally-launched sessions; there is no control channel to send these, so they're disabled with the reason shown rather than offered as a false promise.
-- **macOS only**, currently — process discovery depends on `ps`/`lsof`.
+1. The browser gets the first snapshot from `GET /api/dashboard/snapshot`.
+2. The server polls the local sources and compares each new snapshot with the last one. It sends changes through `GET /api/dashboard/events`. This SSE connection reconnects with backoff and resyncs after a sequence gap.
+3. A reducer applies each update to the TanStack Query cache. An update for one session keeps references for other sessions unchanged.
+4. Commands use HTTP POST requests. The routes are `POST /api/agents/[agentId]/actions` and `POST /api/agents/bulk-actions`.
+
+The interface uses [Astryx](https://astryx.atmeta.com) with its Neutral theme. The main table uses TanStack Table and TanStack Virtual. Temporary interface state stays in React state. Saved settings use a `useSyncExternalStore`-backed localStorage hook.
+
+## Scripts
+
+| Script             | What it does                                                               |
+| ------------------ | -------------------------------------------------------------------------- |
+| `pnpm dev`         | Start the development server with Turbopack on `127.0.0.1`.                |
+| `pnpm build`       | Create a production build.                                                 |
+| `pnpm start`       | Start the production build on `127.0.0.1`.                                 |
+| `pnpm typecheck`   | Run `tsc --noEmit`.                                                        |
+| `pnpm lint`        | Run ESLint with the flat config.                                           |
+| `pnpm test:vitest` | Run unit and component tests with Vitest and React Testing Library.        |
+| `pnpm test:e2e`    | Run Playwright end-to-end tests, including accessibility checks.           |
+| `pnpm astryx`      | Open the Astryx command-line tools for component docs, tokens, and themes. |
 
 ## Security model
 
-This is a single-user local tool, not a multi-tenant service — there is deliberately no login, no accounts, no roles. Safety instead comes from:
+This is a local tool for one user. It is not a service for many users. It has no login, accounts, roles, or cloud backend.
 
-- Binding `127.0.0.1` only, never `0.0.0.0`
-- Rejecting API requests whose `Host` is not a canonical local authority or whose present `Origin` is not that exact local origin
-- Never building a shell command from a string — always `execFile` with an argument array
-- Canonicalizing Claude transcript paths within configured roots; accepting log paths only from the current snapshot; and revalidating snapshot-owned action working directories at use time
-- Every request body validated with Zod before it reaches any handler logic
+- The server binds only to `127.0.0.1`. It does not bind to `0.0.0.0`.
+- Each API request must use the canonical local `Host`. If the request has an `Origin`, it must match that exact local origin.
+- Commands use `execFile` with an array of arguments. They do not build shell commands from strings.
+- Claude transcript paths must stay inside configured canonical roots. Log paths and action working directories come from the current snapshot. The app checks action working directories again before use.
+- Zod validates every request body before handler logic uses it.
+- Request bodies have a size limit.
+
+## Known limitations
+
+- **macOS only.** Process discovery depends on `ps` and `lsof`.
+- **No progress percentage.** Neither source provides a percent-complete value. Running progress is indeterminate. Completed progress is full.
+- **Codex cost is always `—`.** The local Codex state has no pricing data.
+- **Process control needs a matched process.** Claude Code sessions often have no reliable operating system process match. Stop, Pause, and Resume are available only when the app sees a real process.
+- **Signals can affect more than one process.** Stop, Pause, and Resume can affect all processes that share the target working directory.
+- **Retry, Approve, and Reject do not work.** They stay disabled because there is no control channel for sessions started outside the app.
+- **View Diff is a snapshot.** It is a read-only `git status --short` result from one point in time.
+- **Logs are bounded.** The detail panel reads only a limited tail of each source transcript.
 
 ## License
 
-No license file yet — treat as all-rights-reserved until one is added.
+This repository has no license file. Treat it as all rights reserved until a license is added.

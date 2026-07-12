@@ -61,17 +61,17 @@ function exactHttpOrigin(value: string): string | null {
 export function assertLocalRequest(request: Request): void {
   const protocol = new URL(request.url).protocol;
   if (protocol !== "http:" && protocol !== "https:") {
-    throw new LocalOnlyError(`허용되지 않은 요청 프로토콜입니다: ${protocol}`);
+    throw new LocalOnlyError(`Request protocol is not allowed: ${protocol}`);
   }
 
   const host = request.headers.get("host");
   if (!host) {
-    throw new LocalOnlyError("Host 헤더가 없어 로컬 요청인지 확인할 수 없습니다.");
+    throw new LocalOnlyError("Missing Host header; unable to verify a local request.");
   }
 
   const localOrigin = localOriginFromHostHeader(host, protocol);
   if (!localOrigin) {
-    throw new LocalOnlyError(`허용되지 않은 Host 헤더입니다: ${host}`);
+    throw new LocalOnlyError(`Host header is not allowed: ${host}`);
   }
 
   const origin = request.headers.get("origin");
@@ -80,7 +80,7 @@ export function assertLocalRequest(request: Request): void {
   }
 
   if (exactHttpOrigin(origin) !== localOrigin) {
-    throw new LocalOnlyError(`허용되지 않은 Origin 헤더입니다: ${origin}`);
+    throw new LocalOnlyError(`Origin header is not allowed: ${origin}`);
   }
 }
 
@@ -89,19 +89,19 @@ export async function readJsonRequestBody(request: Request): Promise<JsonBodyRes
   if (mediaType !== "application/json") {
     return {
       ok: false,
-      response: NextResponse.json({ error: "Content-Type은 application/json이어야 합니다." }, { status: 415 }),
+      response: NextResponse.json({ error: "Content-Type must be application/json." }, { status: 415 }),
     };
   }
 
   const contentLength = Number(request.headers.get("content-length"));
   if (Number.isFinite(contentLength) && contentLength > MAX_JSON_BODY_BYTES) {
     await request.body?.cancel();
-    return { ok: false, response: NextResponse.json({ error: "요청 본문이 너무 큽니다." }, { status: 413 }) };
+    return { ok: false, response: NextResponse.json({ error: "Request body is too large." }, { status: 413 }) };
   }
 
   const reader = request.body?.getReader();
   if (!reader) {
-    return { ok: false, response: NextResponse.json({ error: "JSON 본문을 파싱하지 못했습니다." }, { status: 400 }) };
+    return { ok: false, response: NextResponse.json({ error: "Unable to parse the JSON request body." }, { status: 400 }) };
   }
 
   const decoder = new TextDecoder();
@@ -115,7 +115,7 @@ export async function readJsonRequestBody(request: Request): Promise<JsonBodyRes
     size += chunk.value.byteLength;
     if (size > MAX_JSON_BODY_BYTES) {
       await reader.cancel();
-      return { ok: false, response: NextResponse.json({ error: "요청 본문이 너무 큽니다." }, { status: 413 }) };
+      return { ok: false, response: NextResponse.json({ error: "Request body is too large." }, { status: 413 }) };
     }
     raw += decoder.decode(chunk.value, { stream: true });
   }
@@ -125,7 +125,7 @@ export async function readJsonRequestBody(request: Request): Promise<JsonBodyRes
     const value: unknown = JSON.parse(raw);
     return { ok: true, value };
   } catch {
-    return { ok: false, response: NextResponse.json({ error: "JSON 본문을 파싱하지 못했습니다." }, { status: 400 }) };
+    return { ok: false, response: NextResponse.json({ error: "Unable to parse the JSON request body." }, { status: 400 }) };
   }
 }
 

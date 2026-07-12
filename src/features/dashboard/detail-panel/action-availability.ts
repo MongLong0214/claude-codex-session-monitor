@@ -6,9 +6,9 @@ import type { Agent } from "@/domain/agent/agent";
  * (data-access/local-adapter.ts) so a disabled button never contradicts what the server would answer.
  */
 export const NO_CONTROL_CHANNEL_REASON =
-  "이 모니터는 읽기 전용 관찰자입니다. 외부에서 실행된 세션에는 stdin/PTY 제어 채널이 없어 이 동작을 보낼 수 없습니다.";
-const NO_RUNTIME_REASON = "작업 디렉터리에서 실행 중인 Codex 프로세스를 찾지 못했습니다.";
-const NO_WORKING_DIRECTORY_REASON = "에이전트의 작업 디렉터리를 확인할 수 없습니다.";
+  "This monitor is a read-only observer. Sessions started externally have no stdin/PTY control channel, so this action cannot be sent.";
+const NO_RUNTIME_REASON = "No running Codex process was found in the working directory.";
+const NO_WORKING_DIRECTORY_REASON = "The agent's working directory is unavailable.";
 
 /** ACTION_HANDLERS answers these with status "skipped" unconditionally — never "sometimes available". */
 const NO_CONTROL_CHANNEL_ACTIONS = new Set<AgentActionType>(["retry", "approve", "reject"]);

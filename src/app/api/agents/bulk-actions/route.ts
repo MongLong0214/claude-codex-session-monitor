@@ -21,7 +21,7 @@ export async function POST(request: Request) {
 
   const parsed = BulkAgentActionRequestSchema.safeParse(body.value);
   if (!parsed.success) {
-    return NextResponse.json({ error: "요청 본문이 올바르지 않습니다." }, { status: 400 });
+    return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
   const { agentIds, action, force } = parsed.data;
@@ -38,7 +38,7 @@ export async function POST(request: Request) {
         agentId,
         action,
         status: "skipped",
-        message: "등록되지 않은 에이전트입니다.",
+        message: "Agent is not registered.",
       },
   );
 

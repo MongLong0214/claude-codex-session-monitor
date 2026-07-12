@@ -19,7 +19,7 @@ interface StatusCountersProps {
 
 export function StatusCounters({ summary, activeFilter, onToggleFilter }: StatusCountersProps) {
   return (
-    <HStack gap={3} vAlign="center" as="ul" aria-label="에이전트 상태 요약">
+    <HStack gap={0} vAlign="center" as="ul" aria-label="Agent status summary" className={styles.counterList}>
       {TOP_BAR_COUNTER_ORDER.map((kind) => {
         const count = summary.statusCounts[kind] ?? 0;
         const isActive = activeFilter.includes(kind);
@@ -32,8 +32,10 @@ export function StatusCounters({ summary, activeFilter, onToggleFilter }: Status
               className={styles.counterButton}
             >
               <StatusDot variant={STATUS_DOT_VARIANT[kind]} label={STATUS_LABEL[kind]} />
-              <Text type="body">{STATUS_LABEL[kind]}</Text>
-              <Text type="supporting" hasTabularNumbers>
+              <Text type="supporting" weight="medium">
+                {STATUS_LABEL[kind]}
+              </Text>
+              <Text type="code" size="sm" hasTabularNumbers className={styles.counterValue}>
                 {count}
               </Text>
             </button>
@@ -41,9 +43,9 @@ export function StatusCounters({ summary, activeFilter, onToggleFilter }: Status
         );
       })}
       {/* axe list-13: a <ul> may only directly contain <li> — wrap the trailing summary too. */}
-      <li className={styles.counterItem}>
-        <Text type="supporting" hasTabularNumbers>
-          전체 {summary.totalAgents} · 프로젝트 {summary.activeProjects}
+      <li className={`${styles.counterItem} ${styles.summaryItem}`}>
+        <Text type="supporting" hasTabularNumbers className={styles.summaryText}>
+          Total {summary.totalAgents} · Projects {summary.activeProjects}
         </Text>
       </li>
     </HStack>

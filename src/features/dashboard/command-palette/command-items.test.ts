@@ -76,6 +76,13 @@ describe("buildCommandItems", () => {
     expect(ids).toEqual(
       expect.arrayContaining(["theme:light", "theme:dark", "theme:system", "density:compact", "density:comfortable"]),
     );
+    expect(items.map((item) => item.label)).toEqual([
+      "Theme: Light",
+      "Theme: Dark",
+      "Theme: System",
+      "Density: Compact",
+      "Density: Comfortable",
+    ]);
   });
 
   it("emits searchable agent, project and branch items from the snapshot", () => {

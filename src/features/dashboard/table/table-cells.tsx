@@ -4,13 +4,13 @@ import { Button } from "@astryxdesign/core/Button";
 import { DropdownMenu } from "@astryxdesign/core/DropdownMenu";
 import { Icon } from "@astryxdesign/core/Icon";
 import { ProgressBar } from "@astryxdesign/core/ProgressBar";
-import { HStack, VStack } from "@astryxdesign/core/Stack";
+import { HStack } from "@astryxdesign/core/Stack";
 import { StatusDot } from "@astryxdesign/core/StatusDot";
 import { Text } from "@astryxdesign/core/Text";
-import { Timestamp } from "@astryxdesign/core/Timestamp";
 import type { AgentActionType } from "@/domain/agent/actions";
 import type { Agent } from "@/domain/agent/agent";
 import type { AgentStatus } from "@/domain/agent/status";
+import { EnglishTimestamp } from "../english-timestamp";
 import { STATUS_DOT_VARIANT, STATUS_LABEL } from "../status-presentation";
 import { agentActivityAt } from "./filter-sort";
 import { EM_DASH, formatCostUsd, formatElapsed, formatRuntimePids, formatTokens } from "./format";
@@ -27,7 +27,7 @@ function EmptyValue() {
 /** Dot + label, never colour alone: StatusDot's five variants collapse our nine states. */
 export function StatusCell({ status }: { status: AgentStatus }) {
   return (
-    <HStack gap={1} vAlign="center">
+    <HStack gap={1} vAlign="center" className={styles.statusToken} data-status={status.kind}>
       <StatusDot
         variant={STATUS_DOT_VARIANT[status.kind]}
         label={STATUS_LABEL[status.kind]}
@@ -63,9 +63,9 @@ export function AgentCell({ agent, onOpenDetail }: AgentCellProps) {
         type="button"
         className={styles.detailTrigger}
         onClick={() => onOpenDetail(agent.id)}
-        aria-label={`${agent.displayName} 상세 보기`}
+        aria-label={`${agent.displayName} details`}
       >
-        <Text type="body" maxLines={1}>
+        <Text type="body" weight="medium" maxLines={1}>
           {agent.displayName}
         </Text>
       </button>
@@ -75,18 +75,24 @@ export function AgentCell({ agent, onOpenDetail }: AgentCellProps) {
 
 export function ProjectBranchCell({ agent }: { agent: Agent }) {
   return (
-    <VStack gap={0} hAlign="start" className={styles.stackedCell}>
-      <Text type="supporting" maxLines={1}>
+    <HStack
+      gap={1}
+      vAlign="center"
+      className={styles.projectBranchCell}
+      role="group"
+      aria-label="Project and branch"
+    >
+      <Text type="code" size="sm" weight="medium" maxLines={1} className={styles.projectName}>
         {agent.project.name}
       </Text>
       {agent.branch === null ? (
         <EmptyValue />
       ) : (
-        <Text type="code" size="sm" color="secondary" maxLines={1}>
+        <Text type="code" size="sm" color="secondary" maxLines={1} className={styles.branchChip}>
           {agent.branch}
         </Text>
       )}
-    </VStack>
+    </HStack>
   );
 }
 
@@ -109,21 +115,28 @@ export function CurrentTaskCell({ currentTask }: { currentTask: string | null })
  */
 export function ProgressCell({ status }: { status: AgentStatus }) {
   if (status.kind === "running") {
-    return <ProgressBar label="실행 중" isLabelHidden isIndeterminate />;
+    return (
+      <ProgressBar
+        label="Running activity; progress is indeterminate"
+        isLabelHidden
+        isIndeterminate
+        variant="success"
+      />
+    );
   }
   if (status.kind === "completed") {
-    return <ProgressBar label="완료" isLabelHidden value={100} variant="success" />;
+    return <ProgressBar label="Completed" isLabelHidden value={100} variant="neutral" />;
   }
   return <EmptyValue />;
 }
 
 export function RecentActivityCell({ agent }: { agent: Agent }) {
-  return <Timestamp value={agentActivityAt(agent)} format="relative" isLive type="supporting" />;
+  return <EnglishTimestamp value={agentActivityAt(agent)} isLive />;
 }
 
 export function RunningTimeCell({ startedAt, nowMs }: { startedAt: string; nowMs: number }) {
   return (
-    <Text type="supporting" hasTabularNumbers>
+    <Text type="code" size="sm" hasTabularNumbers maxLines={1}>
       {formatElapsed(startedAt, nowMs)}
     </Text>
   );
@@ -134,7 +147,7 @@ export function CostCell({ costUsd }: { costUsd: number | null }) {
     return <EmptyValue />;
   }
   return (
-    <Text type="supporting" hasTabularNumbers>
+    <Text type="code" size="sm" hasTabularNumbers maxLines={1}>
       {formatCostUsd(costUsd)}
     </Text>
   );
@@ -145,7 +158,7 @@ export function ModelCell({ agent }: { agent: Agent }) {
     return <EmptyValue />;
   }
   return (
-    <Text type="supporting" maxLines={1}>
+    <Text type="code" size="sm" maxLines={1}>
       {agent.model}
     </Text>
   );
@@ -153,7 +166,7 @@ export function ModelCell({ agent }: { agent: Agent }) {
 
 export function TokensCell({ tokensUsed }: { tokensUsed: number }) {
   return (
-    <Text type="supporting" hasTabularNumbers>
+    <Text type="code" size="sm" hasTabularNumbers maxLines={1}>
       {formatTokens(tokensUsed)}
     </Text>
   );
@@ -165,7 +178,7 @@ export function RetryCountCell({ status }: { status: AgentStatus }) {
     return <EmptyValue />;
   }
   return (
-    <Text type="supporting" hasTabularNumbers>
+    <Text type="code" size="sm" hasTabularNumbers maxLines={1}>
       {status.retryCount}
     </Text>
   );
@@ -175,7 +188,7 @@ export function HeartbeatCell({ lastHeartbeatAt }: { lastHeartbeatAt: string | n
   if (lastHeartbeatAt === null) {
     return <EmptyValue />;
   }
-  return <Timestamp value={lastHeartbeatAt} format="relative" isLive type="supporting" />;
+  return <EnglishTimestamp value={lastHeartbeatAt} isLive />;
 }
 
 export function RuntimeIdCell({ runtimePids }: { runtimePids: number[] }) {
@@ -200,16 +213,16 @@ interface QuickAction {
  */
 function quickActionFor(status: AgentStatus): QuickAction | null {
   if (status.kind === "running") {
-    return { action: "pause", label: "일시정지" };
+    return { action: "pause", label: "Pause" };
   }
   if (status.kind === "paused") {
-    return { action: "resume", label: "재개" };
+    return { action: "resume", label: "Resume" };
   }
   if (status.kind === "failed") {
-    return { action: "retry", label: "재시도" };
+    return { action: "retry", label: "Retry" };
   }
   if (status.kind === "approval_required") {
-    return { action: "approve", label: "승인" };
+    return { action: "approve", label: "Approve" };
   }
   return null;
 }
@@ -235,7 +248,7 @@ export function RowActionsCell({ agent, onAction }: RowActionsCellProps) {
       )}
       <DropdownMenu
         button={{
-          label: `${agent.displayName} 추가 작업`,
+          label: `${agent.displayName} more actions`,
           icon: <Icon icon="moreHorizontal" />,
           variant: "ghost",
           size: "sm",
@@ -244,11 +257,11 @@ export function RowActionsCell({ agent, onAction }: RowActionsCellProps) {
         hasChevron={false}
         menuWidth={200}
         items={[
-          { label: "재시도", onClick: () => onAction(agent.id, "retry"), isDisabled: isTerminated },
-          { label: "승인", onClick: () => onAction(agent.id, "approve"), isDisabled: isTerminated },
-          { label: "거부", onClick: () => onAction(agent.id, "reject"), isDisabled: isTerminated },
+          { label: "Retry", onClick: () => onAction(agent.id, "retry"), isDisabled: isTerminated },
+          { label: "Approve", onClick: () => onAction(agent.id, "approve"), isDisabled: isTerminated },
+          { label: "Reject", onClick: () => onAction(agent.id, "reject"), isDisabled: isTerminated },
           { type: "divider" },
-          { label: "중지 (SIGTERM)", onClick: () => onAction(agent.id, "stop"), isDisabled: isTerminated },
+          { label: "Stop (SIGTERM)", onClick: () => onAction(agent.id, "stop"), isDisabled: isTerminated },
         ]}
       />
     </HStack>

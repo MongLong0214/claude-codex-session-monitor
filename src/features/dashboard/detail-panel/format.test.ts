@@ -19,28 +19,28 @@ function isoMinus(milliseconds: number): string {
 
 describe("formatElapsed", () => {
   it("renders seconds below one minute", () => {
-    expect(formatElapsed(isoMinus(0), NOW)).toBe("0초");
-    expect(formatElapsed(isoMinus(12_000), NOW)).toBe("12초");
-    expect(formatElapsed(isoMinus(59_999), NOW)).toBe("59초");
+    expect(formatElapsed(isoMinus(0), NOW)).toBe("0s");
+    expect(formatElapsed(isoMinus(12_000), NOW)).toBe("12s");
+    expect(formatElapsed(isoMinus(59_999), NOW)).toBe("59s");
   });
 
   it("renders whole minutes below one hour", () => {
-    expect(formatElapsed(isoMinus(60_000), NOW)).toBe("1분");
-    expect(formatElapsed(isoMinus(59 * 60_000 + 59_000), NOW)).toBe("59분");
+    expect(formatElapsed(isoMinus(60_000), NOW)).toBe("1m");
+    expect(formatElapsed(isoMinus(59 * 60_000 + 59_000), NOW)).toBe("59m");
   });
 
   it("renders hours and drops a zero minute remainder", () => {
-    expect(formatElapsed(isoMinus(3_600_000), NOW)).toBe("1시간");
-    expect(formatElapsed(isoMinus(3_600_000 + 24 * 60_000), NOW)).toBe("1시간 24분");
+    expect(formatElapsed(isoMinus(3_600_000), NOW)).toBe("1h");
+    expect(formatElapsed(isoMinus(3_600_000 + 24 * 60_000), NOW)).toBe("1h 24m");
   });
 
   it("renders days and drops a zero hour remainder", () => {
-    expect(formatElapsed(isoMinus(86_400_000), NOW)).toBe("1일");
-    expect(formatElapsed(isoMinus(2 * 86_400_000 + 3 * 3_600_000), NOW)).toBe("2일 3시간");
+    expect(formatElapsed(isoMinus(86_400_000), NOW)).toBe("1d");
+    expect(formatElapsed(isoMinus(2 * 86_400_000 + 3 * 3_600_000), NOW)).toBe("2d 3h");
   });
 
   it("clamps a future start time to zero rather than emitting a negative duration", () => {
-    expect(formatElapsed(new Date(NOW + 5_000).toISOString(), NOW)).toBe("0초");
+    expect(formatElapsed(new Date(NOW + 5_000).toISOString(), NOW)).toBe("0s");
   });
 
   it("returns the empty marker for an unparseable timestamp", () => {
@@ -70,7 +70,7 @@ describe("statusTimestamp", () => {
     [{ kind: "running", startedAt: isoMinus(1000), lastHeartbeatAt: isoMinus(10) }, isoMinus(10)],
     [{ kind: "waiting", since: isoMinus(20) }, isoMinus(20)],
     [{ kind: "approval_required", requestedAt: isoMinus(30) }, isoMinus(30)],
-    [{ kind: "blocked", blocker: "권한 필요", since: isoMinus(40) }, isoMinus(40)],
+    [{ kind: "blocked", blocker: "Permission required", since: isoMinus(40) }, isoMinus(40)],
     [{ kind: "failed", error: "boom", retryCount: 2, failedAt: isoMinus(50) }, isoMinus(50)],
     [{ kind: "completed", completedAt: isoMinus(60) }, isoMinus(60)],
     [{ kind: "paused", pausedAt: isoMinus(70) }, isoMinus(70)],
@@ -92,8 +92,8 @@ describe("retryCount / statusReason", () => {
   });
 
   it("exposes a reason only for failed (error) and blocked (blocker)", () => {
-    expect(statusReason({ kind: "failed", error: "빌드 실패", retryCount: 0, failedAt: isoMinus(1) })).toBe("빌드 실패");
-    expect(statusReason({ kind: "blocked", blocker: "승인 대기", since: isoMinus(1) })).toBe("승인 대기");
+    expect(statusReason({ kind: "failed", error: "Build failed", retryCount: 0, failedAt: isoMinus(1) })).toBe("Build failed");
+    expect(statusReason({ kind: "blocked", blocker: "Awaiting approval", since: isoMinus(1) })).toBe("Awaiting approval");
     expect(statusReason({ kind: "waiting", since: isoMinus(1) })).toBeNull();
     expect(statusReason({ kind: "offline", lastSeenAt: null })).toBeNull();
   });

@@ -9,12 +9,12 @@ import { deriveBranchOptions } from "../table/filter-sort";
 
 /** Group headings, in the order the palette renders them (first-seen wins). */
 export const COMMAND_GROUP = {
-  currentAgent: "현재 에이전트",
-  theme: "테마",
-  density: "표시 밀도",
-  agents: "에이전트",
-  projects: "프로젝트",
-  branches: "브랜치",
+  currentAgent: "Current agent",
+  theme: "Theme",
+  density: "Display density",
+  agents: "Agents",
+  projects: "Projects",
+  branches: "Branches",
 } as const;
 
 interface CommandItemAux {
@@ -45,14 +45,14 @@ export interface BuildCommandItemsInput {
 }
 
 const THEME_OPTIONS: { mode: ThemeMode; label: string; keywords: string[] }[] = [
-  { mode: "light", label: "테마: 라이트", keywords: ["theme", "light", "라이트", "밝게"] },
-  { mode: "dark", label: "테마: 다크", keywords: ["theme", "dark", "다크", "어둡게"] },
-  { mode: "system", label: "테마: 시스템", keywords: ["theme", "system", "시스템", "자동"] },
+  { mode: "light", label: "Theme: Light", keywords: ["theme", "light", "bright"] },
+  { mode: "dark", label: "Theme: Dark", keywords: ["theme", "dark", "dim"] },
+  { mode: "system", label: "Theme: System", keywords: ["theme", "system", "automatic"] },
 ];
 
 const DENSITY_OPTIONS: { density: RowDensity; label: string; keywords: string[] }[] = [
-  { density: "compact", label: "밀도: 조밀", keywords: ["density", "compact", "조밀"] },
-  { density: "comfortable", label: "밀도: 여유", keywords: ["density", "comfortable", "여유"] },
+  { density: "compact", label: "Density: Compact", keywords: ["density", "compact", "dense"] },
+  { density: "comfortable", label: "Density: Comfortable", keywords: ["density", "comfortable", "spacious"] },
 ];
 
 /**
@@ -62,10 +62,10 @@ const DENSITY_OPTIONS: { density: RowDensity; label: string; keywords: string[] 
  * guaranteed no-op. pause/resume/stop survive only when the agent has an observed runtime process.
  */
 const CURRENT_AGENT_ACTIONS: { action: AgentActionType; label: string; keywords: string[] }[] = [
-  { action: "pause", label: "현재 에이전트 정지 (SIGSTOP)", keywords: ["pause", "정지", "일시정지", "sigstop"] },
-  { action: "resume", label: "현재 에이전트 재개 (SIGCONT)", keywords: ["resume", "재개", "sigcont"] },
-  { action: "retry", label: "현재 에이전트 재시도", keywords: ["retry", "재시도"] },
-  { action: "stop", label: "현재 에이전트 중지 (SIGTERM)", keywords: ["stop", "중지", "종료", "sigterm"] },
+  { action: "pause", label: "Pause current agent (SIGSTOP)", keywords: ["pause", "suspend", "sigstop"] },
+  { action: "resume", label: "Resume current agent (SIGCONT)", keywords: ["resume", "continue", "sigcont"] },
+  { action: "retry", label: "Retry current agent", keywords: ["retry", "rerun"] },
+  { action: "stop", label: "Stop current agent (SIGTERM)", keywords: ["stop", "terminate", "quit", "sigterm"] },
 ];
 
 /**

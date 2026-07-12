@@ -21,8 +21,8 @@ export const SEARCH_INPUT_ID = "agent-table-search-input";
 const STATUS_OPTIONS = AgentStatusKindSchema.options.map((kind) => ({ value: kind, label: STATUS_LABEL[kind] }));
 
 const DENSITY_OPTIONS: { value: RowDensity; label: string }[] = [
-  { value: "compact", label: "조밀" },
-  { value: "comfortable", label: "여유" },
+  { value: "compact", label: "Compact" },
+  { value: "comfortable", label: "Comfortable" },
 ];
 
 interface TableToolbarProps {
@@ -85,16 +85,18 @@ export function TableToolbar({ tableState, projects, branches, visibleRowCount, 
 
   return (
     <Toolbar
-      label="에이전트 테이블 필터"
+      label="Agent table filters"
       size="sm"
+      gap={1}
       dividers={["bottom"]}
+      className={styles.toolbar}
       startContent={
         <>
           <TextInput
-            id={SEARCH_INPUT_ID}
-            label="에이전트 검색"
+            data-search-input-id={SEARCH_INPUT_ID}
+            label="Search agents"
             isLabelHidden
-            placeholder="이름, 작업, 프로젝트, 브랜치 검색 (/)"
+            placeholder="Search name, task, project, or branch (/)"
             size="sm"
             startIcon="search"
             hasClear
@@ -102,18 +104,18 @@ export function TableToolbar({ tableState, projects, branches, visibleRowCount, 
             onChange={setSearchInput}
           />
           <MultiSelector
-            label="상태"
+            label="Status"
             isLabelHidden
-            placeholder="상태"
+            placeholder="Status"
             size="sm"
             options={STATUS_OPTIONS}
             value={filters.statusKinds}
             onChange={(value) => setStatusKinds(value as AgentStatusKind[])}
           />
           <MultiSelector
-            label="프로젝트"
+            label="Project"
             isLabelHidden
-            placeholder="프로젝트"
+            placeholder="Project"
             size="sm"
             hasSearch
             options={projectOptions}
@@ -121,36 +123,38 @@ export function TableToolbar({ tableState, projects, branches, visibleRowCount, 
             onChange={setProjectCwds}
           />
           <MultiSelector
-            label="브랜치"
+            label="Branch"
             isLabelHidden
-            placeholder="브랜치"
+            placeholder="Branch"
             size="sm"
             hasSearch
             options={branchOptions}
             value={filters.branches}
             onChange={setBranches}
           />
-          {hasActiveFilters ? <Button label="필터 초기화" variant="ghost" size="sm" onClick={resetFilters} /> : null}
+          {hasActiveFilters ? <Button label="Clear filters" variant="ghost" size="sm" onClick={resetFilters} /> : null}
         </>
       }
       endContent={
         <>
           <Text type="supporting" hasTabularNumbers>
-            {visibleRowCount === totalRowCount ? `${totalRowCount}개` : `${visibleRowCount} / ${totalRowCount}개`}
+            {visibleRowCount === totalRowCount
+              ? `${totalRowCount} agents`
+              : `${visibleRowCount} of ${totalRowCount} agents`}
           </Text>
           <MultiSelector
-            label="열 표시"
+            label="Columns"
             isLabelHidden
-            placeholder="열"
+            placeholder="Columns"
             size="sm"
             hasSelectAll
-            selectAllLabel="전체 표시"
+            selectAllLabel="Show all"
             options={columnOptions}
             value={visibleColumnIds}
             onChange={handleColumnVisibilityChange}
           />
           <SegmentedControl
-            label="행 밀도"
+            label="Row density"
             size="sm"
             value={density}
             onChange={(value) => setDensity(value as RowDensity)}

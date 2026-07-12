@@ -47,7 +47,7 @@ describe("POST /api/agents/[agentId]/actions", () => {
 
     // Then
     expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: expect.any(String) });
+    expect(await response.json()).toEqual({ error: "Content-Type must be application/json." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 
@@ -60,7 +60,7 @@ describe("POST /api/agents/[agentId]/actions", () => {
 
     // Then
     expect(response.status).toBe(413);
-    expect(await response.json()).toEqual({ error: expect.any(String) });
+    expect(await response.json()).toEqual({ error: "Request body is too large." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 
@@ -75,7 +75,7 @@ describe("POST /api/agents/[agentId]/actions", () => {
     // Then
     expect(response.status).toBe(400);
     expect(new TextEncoder().encode(responseBody).byteLength).toBeLessThanOrEqual(256);
-    expect(JSON.parse(responseBody)).toEqual({ error: expect.any(String) });
+    expect(JSON.parse(responseBody)).toEqual({ error: "Invalid request body." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
     expect(repositories.execute).not.toHaveBeenCalled();
   });
@@ -91,6 +91,7 @@ describe("POST /api/agents/[agentId]/actions", () => {
 
       // Then
       expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: `Unknown agent: ${agentId}` });
       expect(repositories.execute).not.toHaveBeenCalled();
     },
   );
@@ -104,6 +105,7 @@ describe("POST /api/agents/[agentId]/actions", () => {
 
     // Then
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid agent ID." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 

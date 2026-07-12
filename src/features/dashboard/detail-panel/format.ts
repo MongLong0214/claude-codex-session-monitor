@@ -22,26 +22,26 @@ export function formatElapsed(fromIso: string, nowMs: number): string {
 
   const elapsedMs = Math.max(0, nowMs - startedMs);
   if (elapsedMs < MINUTE_MS) {
-    return `${Math.floor(elapsedMs / 1000)}초`;
+    return `${Math.floor(elapsedMs / 1000)}s`;
   }
 
   if (elapsedMs < HOUR_MS) {
-    return `${Math.floor(elapsedMs / MINUTE_MS)}분`;
+    return `${Math.floor(elapsedMs / MINUTE_MS)}m`;
   }
 
   if (elapsedMs < DAY_MS) {
     const hours = Math.floor(elapsedMs / HOUR_MS);
     const minutes = Math.floor((elapsedMs % HOUR_MS) / MINUTE_MS);
-    return minutes === 0 ? `${hours}시간` : `${hours}시간 ${minutes}분`;
+    return minutes === 0 ? `${hours}h` : `${hours}h ${minutes}m`;
   }
 
   const days = Math.floor(elapsedMs / DAY_MS);
   const hours = Math.floor((elapsedMs % DAY_MS) / HOUR_MS);
-  return hours === 0 ? `${days}일` : `${days}일 ${hours}시간`;
+  return hours === 0 ? `${days}d` : `${days}d ${hours}h`;
 }
 
 export function formatTokens(tokensUsed: number): string {
-  return tokensUsed.toLocaleString("ko-KR");
+  return tokensUsed.toLocaleString("en-US");
 }
 
 /** Always `—` in real/local mode: Codex's state DB carries no pricing data (see local-adapter.ts). */

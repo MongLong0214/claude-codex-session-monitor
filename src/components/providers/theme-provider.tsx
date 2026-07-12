@@ -1,9 +1,9 @@
 "use client";
 
 import { Theme } from "@astryxdesign/core";
-import { neutralTheme } from "@astryxdesign/theme-neutral/built";
 import type { ReactNode } from "react";
 import type { ThemeMode } from "@/domain/settings";
+import { precisionTheme } from "@/themes/precision.js";
 
 interface ThemeProviderProps {
   children: ReactNode;
@@ -13,7 +13,7 @@ interface ThemeProviderProps {
 
 export function ThemeProvider({ children, mode = "system" }: ThemeProviderProps) {
   return (
-    <Theme theme={neutralTheme} mode={mode}>
+    <Theme theme={precisionTheme} mode={mode}>
       {children}
     </Theme>
   );

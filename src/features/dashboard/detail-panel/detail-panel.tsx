@@ -101,10 +101,11 @@ function DetailPanelContent({ agentId, onClose, restoreFocusRef }: DetailPanelCo
     <LayoutPanel
       className={styles.panel}
       resizable={panel.props}
+      hasDivider
       isScrollable={false}
       padding={0}
       role="complementary"
-      label="에이전트 상세"
+      label="Agent details"
     >
       {/* Overlay mode anchors to `.panel`'s position: relative; isReversed because this is an end panel. */}
       <ResizeHandle
@@ -112,16 +113,16 @@ function DetailPanelContent({ agentId, onClose, restoreFocusRef }: DetailPanelCo
         direction="horizontal"
         position="overlay"
         isReversed
-        label="상세 패널 너비 조절"
+        label="Resize detail panel"
       />
 
-      <VStack gap={3} padding={3}>
+      <VStack gap={3} padding={3} className={styles.panelHeader}>
         <HStack gap={2} vAlign="start" hAlign="between">
           <Text type="large" weight="semibold" maxLines={2}>
-            {agent?.displayName ?? "에이전트"}
+            {agent?.displayName ?? "Agent"}
           </Text>
           <IconButton
-            label="상세 패널 닫기"
+            label="Close detail panel"
             icon={<Icon icon="close" />}
             variant="ghost"
             size="sm"
@@ -129,13 +130,13 @@ function DetailPanelContent({ agentId, onClose, restoreFocusRef }: DetailPanelCo
           />
         </HStack>
 
-        {isLoading && !agent ? <Spinner size="md" label="에이전트를 불러오는 중" /> : null}
+        {isLoading && !agent ? <Spinner size="md" label="Loading agent" /> : null}
 
         {!isLoading && !agent ? (
           <EmptyState
             isCompact
-            title="에이전트를 찾을 수 없습니다"
-            description="이 세션은 더 이상 관찰되지 않습니다. 목록에서 다른 세션을 선택하세요."
+            title="Agent not found"
+            description="This session is no longer observed. Select another session from the list."
           />
         ) : null}
 
@@ -147,17 +148,17 @@ function DetailPanelContent({ agentId, onClose, restoreFocusRef }: DetailPanelCo
           <TabList
             value={activeTab}
             onChange={(value) => setActiveTab(value as TabValue)}
-            aria-label="에이전트 상세 탭"
+            aria-label="Agent detail tabs"
             hasDivider
             size="sm"
           >
-            <Tab value="overview" label="개요" />
-            <Tab value="logs" label="로그" />
-            <Tab value="changes" label="변경 사항" />
+            <Tab value="overview" label="Overview" />
+            <Tab value="logs" label="Logs" />
+            <Tab value="changes" label="Changes" />
           </TabList>
 
           {/* Exactly one body is mounted: that unmount/mount IS the lazy-load boundary for the log query. */}
-          <VStack className={styles.tabPanel}>
+          <VStack className={styles.tabPanel} role="region" aria-label="Agent detail content" tabIndex={0}>
             {activeTab === "overview" ? <OverviewTab agent={agent} nowMs={nowMs} /> : null}
             {activeTab === "logs" ? <LogsTab agentId={agent.id} /> : null}
             {activeTab === "changes" ? <ChangesTab agent={agent} /> : null}
@@ -171,24 +172,34 @@ function DetailPanelContent({ agentId, onClose, restoreFocusRef }: DetailPanelCo
 /** Always visible above the tabs: identity, status, location, current task and the primary actions. */
 function AgentHeader({ agent }: { agent: Agent }) {
   return (
-    <VStack gap={2}>
-      <HStack gap={1} vAlign="center" wrap="wrap">
-        <StatusDot variant={STATUS_DOT_VARIANT[agent.status.kind]} label={STATUS_LABEL[agent.status.kind]} />
-        <Text type="body">{STATUS_LABEL[agent.status.kind]}</Text>
+    <VStack gap={2} className={styles.agentHeader}>
+      <HStack gap={1} vAlign="center" wrap="wrap" className={styles.statusLine}>
+        <StatusDot
+          variant={STATUS_DOT_VARIANT[agent.status.kind]}
+          label={STATUS_LABEL[agent.status.kind]}
+          isPulsing={agent.status.kind === "running"}
+        />
+        <Text type="supporting" weight="medium">
+          {STATUS_LABEL[agent.status.kind]}
+        </Text>
         <Text type="supporting">·</Text>
-        <Text type="supporting">{agent.project.name}</Text>
+        <Text type="code" size="sm" maxLines={1}>
+          {agent.project.name}
+        </Text>
       </HStack>
 
       {agent.branch ? (
         <HStack gap={1} vAlign="center">
-          <Text type="supporting">브랜치</Text>
-          <Text type="code">{agent.branch}</Text>
+          <Text type="supporting">Branch</Text>
+          <Text type="code" maxLines={1}>
+            {agent.branch}
+          </Text>
         </HStack>
       ) : null}
 
       {agent.currentTask ? (
-        <VStack gap={0.5}>
-          <Text type="label">현재 작업</Text>
+        <VStack gap={0.5} className={styles.taskBlock}>
+          <Text type="label">Current task</Text>
           <Text type="body" as="p" maxLines={3} className={styles.wrapAnywhere}>
             {agent.currentTask}
           </Text>

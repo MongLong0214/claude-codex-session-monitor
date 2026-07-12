@@ -29,6 +29,13 @@ describe("column defs vs domain/settings contract", () => {
       expect(COLUMN_LABELS[id as keyof typeof COLUMN_LABELS]).toBeTruthy();
     }
   });
+
+  it("gives sortable columns an accessor so TanStack exposes their header controls", () => {
+    const agentColumn = agentTableColumns.find((column) => column.id === "agent");
+    const actionsColumn = agentTableColumns.find((column) => column.id === "actions");
+    expect(agentColumn && "accessorFn" in agentColumn).toBe(true);
+    expect(actionsColumn && "accessorFn" in actionsColumn).toBe(false);
+  });
 });
 
 describe("DEFAULT_COLUMN_VISIBILITY", () => {

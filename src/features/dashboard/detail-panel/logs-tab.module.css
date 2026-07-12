@@ -3,7 +3,7 @@
   min-height: 0;
   overflow-y: auto;
   background: var(--color-background-muted);
-  border: 1px solid var(--color-border);
+  border: var(--border-width) solid var(--color-border);
   border-radius: var(--radius-element);
   padding: var(--spacing-2);
 }
@@ -24,6 +24,7 @@
 }
 
 .lineText {
+  min-width: 0;
   overflow-wrap: anywhere;
   white-space: pre-wrap;
 }

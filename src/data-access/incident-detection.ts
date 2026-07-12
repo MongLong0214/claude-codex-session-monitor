@@ -59,9 +59,9 @@ function detectStaleHeartbeat({ agents }: IncidentDetectionInput): Incident[] {
       detectedAt: new Date(heartbeatMs + STALE_HEARTBEAT_THRESHOLD_MS).toISOString(),
       affectedAgentIds: [agent.id],
       affectedProjectIds: [agent.project.cwd],
-      summary: `${agent.displayName} 세션이 오랫동안 활동하지 않았습니다.`,
-      evidence: `마지막 활동 ${agent.status.lastHeartbeatAt} (임계값 ${minutesOf(STALE_HEARTBEAT_THRESHOLD_MS)}분 초과)`,
-      suggestedAction: "터미널을 열어 세션 상태를 확인하고, 응답이 없으면 프로세스를 정지하세요.",
+      summary: `${agent.displayName} session has been inactive for too long.`,
+      evidence: `Last activity: ${agent.status.lastHeartbeatAt} (exceeded the ${minutesOf(STALE_HEARTBEAT_THRESHOLD_MS)}-minute threshold)`,
+      suggestedAction: "Open the terminal and check the session. If it is unresponsive, stop the process.",
     });
   }
 

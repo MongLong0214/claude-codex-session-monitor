@@ -12,7 +12,7 @@ const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
 
 const NO_CONTROL_CHANNEL_MESSAGE =
-  "이 모니터는 읽기 전용 관찰자입니다. 외부에서 실행된 세션의 stdin/PTY 제어 채널이 없어 이 동작을 수행할 수 없습니다.";
+  "This monitor is a read-only observer. It cannot perform this action because externally started sessions have no stdin/PTY control channel.";
 
 /** Deterministic PRNG. The bulk generator must be byte-identical for the same (count, seed, now). */
 function mulberry32(seed: number): () => number {
@@ -68,7 +68,7 @@ const PROJECT_CLAUDE_LAB: ProjectRef = {
 const LONG_PROJECT_NAME = repeatToLength("extremely-long-monorepo-package-name-that-should-truncate-", 168);
 const LONG_BRANCH_NAME = repeatToLength("feature/very-long-branch-name-for-truncation-testing-", 154);
 const LONG_TASK_TEXT = repeatToLength(
-  "리팩터링 중: src/features/dashboard/components/agent-table.tsx 의 가상 스크롤 경계를 재계산하고 열 너비를 재측정합니다. ",
+  "Refactoring: recalculating virtual-scroll boundaries and remeasuring column widths in src/features/dashboard/components/agent-table.tsx. ",
   212,
 );
 
@@ -84,7 +84,7 @@ const SHARED_FILE_PATH = "src/features/dashboard/components/agent-table.tsx";
 const LOG_SHAPED_TASK = [
   "[16:41:02] tool-call rg --files-with-matches 'AgentStatusKind' src/",
   "[16:41:03] patch_apply_end src/data-access/local-adapter.ts (+42 -7)",
-  "[16:41:09] agent_message 상태 매핑을 5종으로 좁혔습니다. 타입체크 재실행 중…",
+  "[16:41:09] agent_message narrowed the status mapping to five states. Rerunning typecheck...",
 ].join(" ");
 
 interface FixtureSpec {
@@ -118,7 +118,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
   return [
     {
       id: "mock-main-monitor",
-      displayName: "Codex Session Monitor 마이그레이션",
+      displayName: "Migrate Codex Session Monitor",
       role: "main",
       project: PROJECT_MONITOR,
       branch: "main",
@@ -126,7 +126,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "xhigh",
       status: { kind: "running", startedAt: at(3 * HOUR_MS), lastHeartbeatAt: at(12_000) },
-      currentTask: "src/data-access/local-adapter.ts 포팅을 마무리하고 타입체크를 실행합니다.",
+      currentTask: "Finishing the src/data-access/local-adapter.ts port and running typecheck.",
       tokensUsed: 184_302,
       costUsd: null,
       startedAtOffsetMs: 3 * HOUR_MS,
@@ -140,7 +140,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-sub-table",
-      displayName: "에이전트 테이블 열 정의",
+      displayName: "Define agent table columns",
       role: "subagent",
       project: PROJECT_MONITOR,
       branch: "main",
@@ -148,7 +148,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "high",
       status: { kind: "running", startedAt: at(92 * MINUTE_MS), lastHeartbeatAt: at(31_000) },
-      currentTask: `${SHARED_FILE_PATH} 에 상태 뱃지 열을 추가하는 중입니다.`,
+      currentTask: `Adding a status badge column to ${SHARED_FILE_PATH}.`,
       tokensUsed: 42_881,
       costUsd: null,
       startedAtOffsetMs: 92 * MINUTE_MS,
@@ -162,7 +162,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-sub-deep",
-      displayName: "가상 스크롤 측정",
+      displayName: "Measure virtual scrolling",
       role: "subagent",
       project: PROJECT_MONITOR,
       branch: "main",
@@ -184,7 +184,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-sub-virtual",
-      displayName: "테이블 가상화 검토",
+      displayName: "Review table virtualization",
       role: "subagent",
       project: PROJECT_MONITOR,
       branch: "main",
@@ -193,7 +193,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       reasoningEffort: "high",
       // 같은 파일을 편집 중인 두 번째 에이전트 — concurrent_file_edit 픽스처 쌍.
       status: { kind: "waiting", since: at(6 * MINUTE_MS) },
-      currentTask: `${SHARED_FILE_PATH} 의 행 높이 계산 결과를 기다리는 중입니다.`,
+      currentTask: `Waiting for row-height measurements from ${SHARED_FILE_PATH}.`,
       tokensUsed: 8_120,
       costUsd: null,
       startedAtOffsetMs: 70 * MINUTE_MS,
@@ -207,7 +207,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-main-newsletter",
-      displayName: "TLI v3 과학적 재구성",
+      displayName: "Rebuild TLI v3 scientifically",
       role: "main",
       project: PROJECT_NEWSLETTER,
       branch: "feat/tli-v3",
@@ -215,7 +215,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "max",
       status: { kind: "running", startedAt: at(5 * HOUR_MS), lastHeartbeatAt: at(45_000) },
-      currentTask: "지표 정규화 파이프라인을 재작성하고 백테스트를 재실행합니다.",
+      currentTask: "Rewriting the metric-normalization pipeline and rerunning the backtest.",
       tokensUsed: 512_774,
       costUsd: null,
       startedAtOffsetMs: 5 * HOUR_MS,
@@ -229,7 +229,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-sub-ingest",
-      displayName: "가격 데이터 수집기",
+      displayName: "Price data collector",
       role: "subagent",
       project: PROJECT_NEWSLETTER,
       branch: "feat/tli-v3",
@@ -237,7 +237,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "medium",
       status: { kind: "completed", completedAt: at(22 * MINUTE_MS) },
-      currentTask: "커밋 3f2a1c9 'feat(ingest): add adjusted-close normalization' 을 남기고 종료했습니다.",
+      currentTask: "Completed after commit 3f2a1c9 'feat(ingest): add adjusted-close normalization'.",
       tokensUsed: 76_310,
       costUsd: null,
       startedAtOffsetMs: 4 * HOUR_MS,
@@ -251,7 +251,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-sub-digest",
-      displayName: "다이제스트 렌더러",
+      displayName: "Digest renderer",
       role: "subagent",
       project: PROJECT_NEWSLETTER,
       branch: "feat/tli-v3",
@@ -265,7 +265,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
         retryCount: 3,
         failedAt: at(9 * MINUTE_MS),
       },
-      currentTask: "digest-renderer.test.ts 의 스냅샷 4건이 계속 실패합니다.",
+      currentTask: "Four snapshots in digest-renderer.test.ts keep failing.",
       tokensUsed: 98_442,
       costUsd: null,
       startedAtOffsetMs: 3 * HOUR_MS,
@@ -279,7 +279,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-blocked-merge",
-      displayName: "리베이스 충돌 해결",
+      displayName: "Resolve rebase conflicts",
       role: "main",
       project: PROJECT_NEWSLETTER,
       branch: "feat/rebase-domain-types",
@@ -291,7 +291,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
         blocker: "merge conflict in src/domain/agent/agent.ts (both modified)",
         since: at(26 * MINUTE_MS),
       },
-      currentTask: "git rebase main 중 src/domain/agent/agent.ts 충돌로 중단되었습니다.",
+      currentTask: "git rebase main stopped on a conflict in src/domain/agent/agent.ts.",
       tokensUsed: 33_950,
       costUsd: null,
       startedAtOffsetMs: 2 * HOUR_MS,
@@ -305,7 +305,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-approval-deploy",
-      displayName: "릴리스 배포 승인 대기",
+      displayName: "Await release deployment approval",
       role: "main",
       project: PROJECT_POLARIS,
       branch: "release/2026.07",
@@ -315,9 +315,9 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       status: {
         kind: "approval_required",
         requestedAt: at(18 * MINUTE_MS),
-        reason: "gh pr merge --admin 실행 승인이 필요합니다.",
+        reason: "Approval is required to run gh pr merge --admin.",
       },
-      currentTask: "gh pr merge --admin 실행 전 사용자 승인을 기다립니다.",
+      currentTask: "Waiting for user approval before running gh pr merge --admin.",
       tokensUsed: 21_006,
       costUsd: null,
       startedAtOffsetMs: 80 * MINUTE_MS,
@@ -331,7 +331,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-stale-worker",
-      displayName: "레거시 스타일 정리",
+      displayName: "Clean up legacy styles",
       role: "main",
       project: PROJECT_POLARIS,
       branch: "chore/legacy-styles",
@@ -340,7 +340,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       reasoningEffort: "low",
       // 47분 무활동 → stale_heartbeat 인시던트를 트리거한다 (임계값 30분).
       status: { kind: "stale", lastHeartbeatAt: at(47 * MINUTE_MS) },
-      currentTask: "public/app.css 의 미사용 규칙을 제거하던 중 응답이 끊겼습니다.",
+      currentTask: "Stopped responding while removing unused rules from public/app.css.",
       tokensUsed: 15_233,
       costUsd: null,
       startedAtOffsetMs: 4 * HOUR_MS,
@@ -354,7 +354,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-offline-runner",
-      displayName: "야간 배치 실행기",
+      displayName: "Nightly batch runner",
       role: "main",
       project: PROJECT_POLARIS,
       branch: "main",
@@ -362,7 +362,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "medium",
       status: { kind: "offline", lastSeenAt: at(3 * HOUR_MS) },
-      currentTask: "야간 배치가 종료된 뒤 프로세스가 관측되지 않습니다.",
+      currentTask: "No process has been observed since the nightly batch ended.",
       tokensUsed: 64_120,
       costUsd: null,
       startedAtOffsetMs: 9 * HOUR_MS,
@@ -376,7 +376,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-offline-never",
-      displayName: "이름 없는 메인 세션",
+      displayName: "Unnamed main session",
       role: "main",
       project: PROJECT_POLARIS,
       // 선택 필드 누락 픽스처: branch/commitSha/model/currentTask 전부 null.
@@ -399,7 +399,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-paused-batch",
-      displayName: "인덱싱 배치 (일시정지)",
+      displayName: "Indexing batch (paused)",
       role: "main",
       project: PROJECT_NEWSLETTER,
       branch: "chore/reindex",
@@ -407,7 +407,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "low",
       status: { kind: "paused", pausedAt: at(14 * MINUTE_MS) },
-      currentTask: "SIGSTOP 으로 일시정지된 상태입니다. SIGCONT 로 재개할 수 있습니다.",
+      currentTask: "Paused with SIGSTOP. Resume with SIGCONT.",
       tokensUsed: 9_870,
       costUsd: null,
       startedAtOffsetMs: 100 * MINUTE_MS,
@@ -421,7 +421,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-cost-spike",
-      displayName: "대규모 리팩터링 (비용 급증)",
+      displayName: "Large-scale refactor (cost spike)",
       role: "main",
       project: PROJECT_NEWSLETTER,
       branch: "refactor/whole-repo",
@@ -429,7 +429,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "max",
       status: { kind: "running", startedAt: at(7 * HOUR_MS), lastHeartbeatAt: at(5_000) },
-      currentTask: "저장소 전체 타입 시그니처를 재작성하는 중입니다. 토큰 사용량이 급증했습니다.",
+      currentTask: "Rewriting type signatures across the repository. Token usage has spiked.",
       tokensUsed: 4_812_665,
       // 모의 모드에서만 비용을 시뮬레이션한다. 로컬 어댑터는 가격표가 없어 항상 null이다.
       costUsd: 42.87,
@@ -444,7 +444,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-long-names",
-      displayName: repeatToLength("아주 긴 세션 제목이 표에서 어떻게 잘리는지 확인하기 위한 픽스처입니다 ", 158),
+      displayName: repeatToLength("This fixture verifies how a very long session title is truncated in the table ", 158),
       role: "main",
       project: PROJECT_LONG,
       branch: LONG_BRANCH_NAME,
@@ -466,7 +466,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-commit-flavored",
-      displayName: "인증 토큰 회전",
+      displayName: "Rotate authentication token",
       role: "main",
       project: PROJECT_POLARIS,
       branch: "fix/session-token-rotation",
@@ -474,7 +474,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "high",
       status: { kind: "completed", completedAt: at(41 * MINUTE_MS) },
-      currentTask: "커밋 3f2a1c9 'fix(auth): rotate session token on privilege change' 를 푸시했습니다.",
+      currentTask: "Pushed commit 3f2a1c9 'fix(auth): rotate session token on privilege change'.",
       tokensUsed: 55_120,
       costUsd: null,
       startedAtOffsetMs: 3 * HOUR_MS,
@@ -488,7 +488,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-pr-flavored",
-      displayName: "PR 리뷰 대기",
+      displayName: "Await PR review",
       role: "main",
       project: PROJECT_MONITOR,
       branch: "feat/sse-bridge",
@@ -496,7 +496,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "medium",
       status: { kind: "waiting", since: at(11 * MINUTE_MS) },
-      currentTask: "gh pr create --fill 로 생성한 https://github.com/example-user/claude-codex-session-monitor/pull/128 리뷰를 기다립니다.",
+      currentTask: "Waiting for review of https://github.com/example-user/claude-codex-session-monitor/pull/128 created with gh pr create --fill.",
       tokensUsed: 27_640,
       costUsd: null,
       startedAtOffsetMs: 2 * HOUR_MS,
@@ -511,7 +511,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     {
       // Claude Code 세션은 실제 토큰 사용량으로 진짜 비용을 계산할 수 있어 costUsd가 non-null이다.
       id: "mock-claude-refactor",
-      displayName: "타입 안전성 리팩터링 계획 수립",
+      displayName: "Plan type-safety refactor",
       source: "claude_code",
       role: "main",
       project: PROJECT_CLAUDE_LAB,
@@ -522,7 +522,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       // reasoning_effort 개념이 없다 — 실제 어댑터도 null.
       reasoningEffort: null,
       status: { kind: "running", startedAt: at(2 * HOUR_MS), lastHeartbeatAt: at(8_000) },
-      currentTask: "도구 실행: Edit — src/lib 전반의 any 타입을 제거하는 중입니다.",
+      currentTask: "Tool call: Edit — removing any types across src/lib.",
       tokensUsed: 1_284_502,
       costUsd: 8.47,
       startedAtOffsetMs: 2 * HOUR_MS,
@@ -539,7 +539,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     },
     {
       id: "mock-claude-tests",
-      displayName: "Vitest 커버리지 보강",
+      displayName: "Increase Vitest coverage",
       source: "claude_code",
       role: "main",
       // 같은 cwd 를 Codex 세션과 공유 — 병합 시 ProjectRef 가 하나로 합쳐지는지 검증하는 픽스처.
@@ -549,7 +549,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "claude-sonnet-5",
       reasoningEffort: null,
       status: { kind: "waiting", since: at(9 * MINUTE_MS) },
-      currentTask: "사용자 입력 대기 중: 테스트 픽스처 명명 규칙을 확인해 주세요.",
+      currentTask: "Waiting for user input: confirm the test-fixture naming convention.",
       tokensUsed: 642_180,
       costUsd: 2.31,
       startedAtOffsetMs: 70 * MINUTE_MS,
@@ -564,7 +564,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     {
       // 51분 무활동 → stale_heartbeat 인시던트를 트리거한다 (임계값 30분).
       id: "mock-claude-stale",
-      displayName: "문서 사이트 리브랜딩",
+      displayName: "Rebrand documentation site",
       source: "claude_code",
       role: "main",
       project: PROJECT_CLAUDE_LAB,
@@ -573,7 +573,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "claude-opus-4-8",
       reasoningEffort: null,
       status: { kind: "stale", lastHeartbeatAt: at(51 * MINUTE_MS) },
-      currentTask: "도구 실행: Write — 랜딩 페이지 카피를 다시 쓰던 중 응답이 끊겼습니다.",
+      currentTask: "Tool call: Write — stopped responding while rewriting the landing-page copy.",
       tokensUsed: 318_744,
       costUsd: 1.06,
       startedAtOffsetMs: 3 * HOUR_MS,
@@ -588,7 +588,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
     {
       // 가격표에 없는 모델 → costUsd 는 정직하게 null (부분 합계를 완전한 총액처럼 보이게 하지 않는다).
       id: "mock-claude-unknown-model",
-      displayName: "실험적 모델로 프로토타이핑",
+      displayName: "Prototype with experimental model",
       source: "claude_code",
       role: "main",
       project: PROJECT_CLAUDE_LAB,
@@ -597,7 +597,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "claude-fable-5",
       reasoningEffort: null,
       status: { kind: "running", startedAt: at(40 * MINUTE_MS), lastHeartbeatAt: at(15_000) },
-      currentTask: "가격표에 없는 모델을 사용 중이라 비용을 계산할 수 없습니다.",
+      currentTask: "Cost cannot be calculated because this model is not in the pricing catalog.",
       tokensUsed: 205_991,
       costUsd: null,
       startedAtOffsetMs: 40 * MINUTE_MS,
@@ -737,7 +737,7 @@ function bulkStatus(kind: AgentStatusKind, now: number, ageMs: number, idleMs: n
     return { kind, since: seenAt };
   }
   if (kind === "approval_required") {
-    return { kind, requestedAt: seenAt, reason: "쓰기 권한이 필요한 명령 승인 대기" };
+    return { kind, requestedAt: seenAt, reason: "Awaiting approval for a command that requires write access" };
   }
   if (kind === "blocked") {
     return { kind, blocker: "merge conflict in src/index.ts", since: seenAt };
@@ -795,7 +795,7 @@ export function generateBulkSnapshot(count: number, seed: number, now: number): 
 
     agents.push({
       id,
-      displayName: `${project.name} 작업 #${index}`,
+      displayName: `${project.name} task #${index}`,
       /** Every third bulk agent is Claude-Code-sourced so virtualization stress covers both sources. */
       source: index % 3 === 0 ? "claude_code" : "codex",
       role: isMain ? "main" : "subagent",
@@ -805,7 +805,7 @@ export function generateBulkSnapshot(count: number, seed: number, now: number): 
       model: "gpt-5.6-sol",
       reasoningEffort: index % 3 === 0 ? "high" : "medium",
       status: bulkStatus(kind, now, ageMs, idleMs),
-      currentTask: `[bulk] ${project.name} 에서 ${branch} 브랜치의 작업 ${index}를 처리하는 중입니다.`,
+      currentTask: `[bulk] Processing task ${index} on branch ${branch} in ${project.name}.`,
       tokensUsed: Math.floor(random() * 500_000),
       costUsd: index % 7 === 0 ? Number((random() * 20).toFixed(2)) : null,
       startedAt: iso(now - ageMs),
@@ -833,7 +833,7 @@ function simulateOutcome(action: AgentActionType): Omit<AgentActionResult, "agen
     return { status: "skipped", message: NO_CONTROL_CHANNEL_MESSAGE };
   }
 
-  return { status: "success", message: `모의 어댑터: ${action} 동작을 시뮬레이션했습니다.` };
+  return { status: "success", message: `Mock adapter: simulated the ${action} action.` };
 }
 
 export function createMockAdapter(now: number, snapshot?: DashboardSnapshot): DashboardRepository & AgentCommandRepository {
@@ -841,7 +841,7 @@ export function createMockAdapter(now: number, snapshot?: DashboardSnapshot): Da
 
   async function execute(agentId: string, request: AgentActionRequest): Promise<AgentActionResult> {
     if (!fixture.byId[agentId]) {
-      return { agentId, action: request.action, status: "skipped", message: "등록되지 않은 에이전트입니다." };
+      return { agentId, action: request.action, status: "skipped", message: "Agent is not registered." };
     }
 
     return { agentId, action: request.action, ...simulateOutcome(request.action) };

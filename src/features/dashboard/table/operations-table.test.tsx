@@ -33,7 +33,7 @@ function agentIdByDisplayName(displayName: string): AgentId {
   return found.id;
 }
 
-const MONITOR_ID = agentIdByDisplayName("Codex Session Monitor 마이그레이션");
+const MONITOR_ID = agentIdByDisplayName("Migrate Codex Session Monitor");
 
 /** `tableState` is owned by DashboardRoot in production (so the command palette can share it); a
  * thin harness stands in for that owner here, using the real hook with its no-persistence defaults. */
@@ -59,14 +59,14 @@ function renderTable(onOpenDetail: (agentId: AgentId) => void = vi.fn()) {
 
 async function openRowStopDialog(user: ReturnType<typeof userEvent.setup>) {
   renderTable();
-  await screen.findByRole("table", { name: "에이전트 운영 테이블" });
-  const trigger = screen.getByRole("button", { name: "Codex Session Monitor 마이그레이션 추가 작업" });
+  await screen.findByRole("table", { name: "Agent operations table" });
+  const trigger = screen.getByRole("button", { name: "Migrate Codex Session Monitor more actions" });
   await user.click(trigger);
   const menu = document.getElementById(trigger.getAttribute("aria-controls") ?? "");
   if (!menu) {
     throw new Error("row action menu not found");
   }
-  await user.click(within(menu).getByRole("menuitem", { name: "중지 (SIGTERM)", hidden: true }));
+  await user.click(within(menu).getByRole("menuitem", { name: "Stop (SIGTERM)", hidden: true }));
   return screen.findByRole("alertdialog");
 }
 
@@ -77,7 +77,7 @@ beforeEach(() => {
     agentId: MONITOR_ID,
     action: "stop",
     status: "success",
-    message: "모의: 중지 완료",
+    message: "Mock: stop completed",
   });
 });
 
@@ -86,7 +86,7 @@ describe("OperationsTable search/filter", () => {
     const user = userEvent.setup();
     renderTable();
 
-    const searchInput = await screen.findByRole("textbox", { name: "에이전트 검색" });
+    const searchInput = await screen.findByRole("textbox", { name: "Search agents" });
     // ASCII substring unique to mock-pr-flavored's currentTask — avoids IME concerns with Korean typing.
     await user.type(searchInput, "pull/128");
 
@@ -94,65 +94,65 @@ describe("OperationsTable search/filter", () => {
     // "N / total" counter (proof the debounced filter has actually applied) before asserting on
     // row presence/absence, rather than racing an unrelated row that happens to render regardless.
     await waitFor(() => {
-      expect(screen.getByText(`1 / ${SNAPSHOT.allIds.length}개`)).toBeInTheDocument();
+      expect(screen.getByText(`1 of ${SNAPSHOT.allIds.length} agents`)).toBeInTheDocument();
     });
-    expect(screen.getByRole("button", { name: "PR 리뷰 대기 상세 보기" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "인증 토큰 회전 상세 보기" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Await PR review details" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Rotate authentication token details" })).not.toBeInTheDocument();
   });
 
-  it("AC: selecting a status in the toolbar's 상태 filter narrows rows the same way a status-counter click would", async () => {
+  it("AC: selecting a status in the toolbar's Status filter narrows rows the same way a status-counter click would", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
+    await screen.findByRole("table", { name: "Agent operations table" });
 
-    const statusTrigger = screen.getByRole("combobox", { name: "상태" });
+    const statusTrigger = screen.getByRole("combobox", { name: "Status" });
     await user.click(statusTrigger);
     const listbox = document.getElementById(statusTrigger.getAttribute("aria-controls") ?? "");
     if (!listbox) {
-      throw new Error("상태 listbox not found");
+      throw new Error("Status listbox not found");
     }
-    await user.click(within(listbox).getByRole("option", { name: "실패", hidden: true }));
+    await user.click(within(listbox).getByRole("option", { name: "Failed", hidden: true }));
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "다이제스트 렌더러 상세 보기" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Digest renderer details" })).toBeInTheDocument();
     });
-    expect(screen.queryByRole("button", { name: "PR 리뷰 대기 상세 보기" })).not.toBeInTheDocument();
-    expect(screen.getByText(`1 / ${SNAPSHOT.allIds.length}개`)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Await PR review details" })).not.toBeInTheDocument();
+    expect(screen.getByText(`1 of ${SNAPSHOT.allIds.length} agents`)).toBeInTheDocument();
   });
 });
 
 describe("OperationsTable column visibility", () => {
-  it("AC: toggling a column off in 열 표시 hides it, toggling it back on restores it", async () => {
+  it("AC: toggling a column off in Columns hides it, toggling it back on restores it", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
-    expect(screen.getByRole("columnheader", { name: "현재 작업" })).toBeInTheDocument();
+    await screen.findByRole("table", { name: "Agent operations table" });
+    expect(screen.getByRole("columnheader", { name: "Current task" })).toBeInTheDocument();
 
-    const columnsTrigger = screen.getByRole("combobox", { name: "열 표시" });
+    const columnsTrigger = screen.getByRole("combobox", { name: "Columns" });
     await user.click(columnsTrigger);
     const listbox = document.getElementById(columnsTrigger.getAttribute("aria-controls") ?? "");
     if (!listbox) {
-      throw new Error("열 표시 listbox not found");
+      throw new Error("Columns listbox not found");
     }
-    await user.click(within(listbox).getByRole("option", { name: "현재 작업", hidden: true }));
+    await user.click(within(listbox).getByRole("option", { name: "Current task", hidden: true }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("columnheader", { name: "현재 작업" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("columnheader", { name: "Current task" })).not.toBeInTheDocument();
     });
 
     await user.click(columnsTrigger);
-    await user.click(within(listbox).getByRole("option", { name: "현재 작업", hidden: true }));
+    await user.click(within(listbox).getByRole("option", { name: "Current task", hidden: true }));
 
     await waitFor(() => {
-      expect(screen.getByRole("columnheader", { name: "현재 작업" })).toBeInTheDocument();
+      expect(screen.getByRole("columnheader", { name: "Current task" })).toBeInTheDocument();
     });
   });
 });
 
 describe("OperationsTable row density", () => {
-  it("AC: toggling density between 조밀/여유 actually changes the rendered row height", async () => {
+  it("AC: toggling density between Compact/Comfortable actually changes the rendered row height", async () => {
     const user = userEvent.setup();
     const { container } = renderTable();
 
@@ -167,10 +167,10 @@ describe("OperationsTable row density", () => {
     // useAgentTableState defaults density to DEFAULT_DASHBOARD_SETTINGS.rowDensity ("compact" -> 34px).
     expect(table.style.getPropertyValue("--row-height")).toBe("34px");
 
-    await user.click(screen.getByRole("radio", { name: "여유" }));
+    await user.click(screen.getByRole("radio", { name: "Comfortable" }));
     await waitFor(() => expect(table.style.getPropertyValue("--row-height")).toBe("40px"));
 
-    await user.click(screen.getByRole("radio", { name: "조밀" }));
+    await user.click(screen.getByRole("radio", { name: "Compact" }));
     await waitFor(() => expect(table.style.getPropertyValue("--row-height")).toBe("34px"));
   });
 });
@@ -180,35 +180,35 @@ describe("OperationsTable bulk selection", () => {
     const user = userEvent.setup();
     renderTable();
 
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
-    expect(screen.queryByRole("region", { name: "선택한 에이전트 일괄 작업" })).not.toBeInTheDocument();
+    await screen.findByRole("table", { name: "Agent operations table" });
+    expect(screen.queryByRole("region", { name: "Bulk actions for selected agents" })).not.toBeInTheDocument();
 
-    const rowCheckbox = screen.getByRole("checkbox", { name: "Codex Session Monitor 마이그레이션 선택" });
+    const rowCheckbox = screen.getByRole("checkbox", { name: "Select Migrate Codex Session Monitor" });
     await user.click(rowCheckbox);
 
-    expect(screen.getByRole("region", { name: "선택한 에이전트 일괄 작업" })).toBeInTheDocument();
-    expect(screen.getByText("1개 선택됨")).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: "Bulk actions for selected agents" })).toBeInTheDocument();
+    expect(screen.getByText("1 selected")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "선택 해제" }));
-    expect(screen.queryByRole("region", { name: "선택한 에이전트 일괄 작업" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear selection" }));
+    expect(screen.queryByRole("region", { name: "Bulk actions for selected agents" })).not.toBeInTheDocument();
   });
 
   it("AC: a bulk action reports the success/failed/skipped breakdown from the response", async () => {
     const user = userEvent.setup();
     vi.mocked(postBulkAgentAction).mockResolvedValue({
-      results: [{ agentId: MONITOR_ID, action: "pause", status: "success", message: "모의: 일시정지 완료" }],
+      results: [{ agentId: MONITOR_ID, action: "pause", status: "success", message: "Mock: pause completed" }],
     });
 
     renderTable();
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
+    await screen.findByRole("table", { name: "Agent operations table" });
 
-    await user.click(screen.getByRole("checkbox", { name: "Codex Session Monitor 마이그레이션 선택" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select Migrate Codex Session Monitor" }));
     // Scoped to the bulk action bar: a running row's own quick-action cell also renders a
     // same-labelled "일시정지" button, so an unscoped query would be ambiguous.
-    const bulkBar = screen.getByRole("region", { name: "선택한 에이전트 일괄 작업" });
-    await user.click(within(bulkBar).getByRole("button", { name: "일시정지" }));
+    const bulkBar = screen.getByRole("region", { name: "Bulk actions for selected agents" });
+    await user.click(within(bulkBar).getByRole("button", { name: "Pause" }));
 
-    expect(await screen.findByText("1건 성공 · 0건 실패 · 0건 건너뜀")).toBeInTheDocument();
+    expect(await screen.findByText("1 succeeded · 0 failed · 0 skipped")).toBeInTheDocument();
     // react-query's mutationFn also receives a context object as a 2nd arg — only the request body is ours to assert.
     expect(vi.mocked(postBulkAgentAction).mock.calls[0]?.[0]).toEqual({ agentIds: [MONITOR_ID], action: "pause" });
   });
@@ -216,21 +216,21 @@ describe("OperationsTable bulk selection", () => {
   it("AC: bulk stop waits for confirmation before posting", async () => {
     const user = userEvent.setup();
     vi.mocked(postBulkAgentAction).mockResolvedValue({
-      results: [{ agentId: MONITOR_ID, action: "stop", status: "success", message: "모의: 중지 완료" }],
+      results: [{ agentId: MONITOR_ID, action: "stop", status: "success", message: "Mock: stop completed" }],
     });
 
     renderTable();
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
-    await user.click(screen.getByRole("checkbox", { name: "Codex Session Monitor 마이그레이션 선택" }));
+    await screen.findByRole("table", { name: "Agent operations table" });
+    await user.click(screen.getByRole("checkbox", { name: "Select Migrate Codex Session Monitor" }));
 
-    const bulkBar = screen.getByRole("region", { name: "선택한 에이전트 일괄 작업" });
-    await user.click(within(bulkBar).getByRole("button", { name: "중지" }));
+    const bulkBar = screen.getByRole("region", { name: "Bulk actions for selected agents" });
+    await user.click(within(bulkBar).getByRole("button", { name: "Stop" }));
 
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveTextContent(STOP_DIALOG_DESCRIPTION);
     expect(postBulkAgentAction).not.toHaveBeenCalled();
 
-    await user.click(within(dialog).getByRole("button", { name: "중지" }));
+    await user.click(within(dialog).getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(postBulkAgentAction).toHaveBeenCalledOnce());
     expect(vi.mocked(postBulkAgentAction).mock.calls[0]?.[0]).toEqual({ agentIds: [MONITOR_ID], action: "stop" });
   });
@@ -240,11 +240,11 @@ describe("OperationsTable row stop confirmation", () => {
   it("AC: cancelling row-menu stop closes the dialog without posting", async () => {
     const user = userEvent.setup();
     const dialog = await openRowStopDialog(user);
-    expect(dialog).toHaveTextContent("Codex Session Monitor 마이그레이션 중지");
+    expect(dialog).toHaveTextContent("Stop Migrate Codex Session Monitor");
     expect(dialog).toHaveTextContent(STOP_DIALOG_DESCRIPTION);
     expect(postAgentAction).not.toHaveBeenCalled();
 
-    await user.click(within(dialog).getByRole("button", { name: "취소" }));
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });
@@ -256,7 +256,7 @@ describe("OperationsTable row stop confirmation", () => {
     const dialog = await openRowStopDialog(user);
     expect(postAgentAction).not.toHaveBeenCalled();
 
-    await user.click(within(dialog).getByRole("button", { name: "중지" }));
+    await user.click(within(dialog).getByRole("button", { name: "Stop" }));
     await waitFor(() => {
       expect(postAgentAction).toHaveBeenCalledExactlyOnceWith(MONITOR_ID, { action: "stop" });
     });
@@ -264,25 +264,32 @@ describe("OperationsTable row stop confirmation", () => {
 });
 
 describe("OperationsTable keyboard navigation", () => {
+  it("renders a sortable Agent header control", async () => {
+    renderTable();
+    await screen.findByRole("table", { name: "Agent operations table" });
+
+    expect(screen.getByTitle("Agent")).toBeInTheDocument();
+  });
+
   it("AC: ArrowDown moves roving focus to the next row, and Enter on the focused row opens its detail panel", async () => {
     const user = userEvent.setup();
     const onOpenDetail = vi.fn();
     // Narrow to exactly two rows (실패 + 차단됨) so ArrowDown from row 0 deterministically lands on row 1
     // regardless of the default sort order, without hard-coding which status sorts first.
-    const failedId = agentIdByDisplayName("다이제스트 렌더러");
-    const blockedId = agentIdByDisplayName("리베이스 충돌 해결");
+    const failedId = agentIdByDisplayName("Digest renderer");
+    const blockedId = agentIdByDisplayName("Resolve rebase conflicts");
 
     const { container } = renderTable(onOpenDetail);
-    await screen.findByRole("table", { name: "에이전트 운영 테이블" });
+    await screen.findByRole("table", { name: "Agent operations table" });
 
-    const statusTrigger = screen.getByRole("combobox", { name: "상태" });
+    const statusTrigger = screen.getByRole("combobox", { name: "Status" });
     await user.click(statusTrigger);
     const listbox = document.getElementById(statusTrigger.getAttribute("aria-controls") ?? "");
     if (!listbox) {
-      throw new Error("상태 listbox not found");
+      throw new Error("Status listbox not found");
     }
-    await user.click(within(listbox).getByRole("option", { name: "실패", hidden: true }));
-    await user.click(within(listbox).getByRole("option", { name: "차단됨", hidden: true }));
+    await user.click(within(listbox).getByRole("option", { name: "Failed", hidden: true }));
+    await user.click(within(listbox).getByRole("option", { name: "Blocked", hidden: true }));
     await user.keyboard("{Escape}");
 
     const rows = await waitFor(() => {
@@ -305,8 +312,8 @@ describe("OperationsTable keyboard navigation", () => {
 
     await user.keyboard("{Enter}");
 
-    const secondRowId = within(secondRow).getByRole("button", { name: /상세 보기$/ }).getAttribute("aria-label") ===
-      "다이제스트 렌더러 상세 보기"
+    const secondRowId = within(secondRow).getByRole("button", { name: /details$/ }).getAttribute("aria-label") ===
+      "Digest renderer details"
       ? failedId
       : blockedId;
     expect(onOpenDetail).toHaveBeenCalledExactlyOnceWith(secondRowId);

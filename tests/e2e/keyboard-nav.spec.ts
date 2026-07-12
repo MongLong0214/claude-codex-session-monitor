@@ -21,8 +21,8 @@ test.describe("Table keyboard navigation", () => {
     const secondRow = rows.nth(1);
     await expect(secondRow).toBeFocused();
 
-    const detailButton = secondRow.getByRole("button", { name: /상세 보기$/ });
-    const expectedName = (await detailButton.getAttribute("aria-label"))?.replace(/ 상세 보기$/, "");
+    const detailButton = secondRow.getByRole("button", { name: /details$/ });
+    const expectedName = (await detailButton.getAttribute("aria-label"))?.replace(/ details$/, "");
 
     await page.keyboard.press("Enter");
 

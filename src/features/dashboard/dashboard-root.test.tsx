@@ -19,7 +19,12 @@ vi.mock("@/lib/query/use-realtime-sync", () => ({
 }));
 
 vi.mock("./dashboard-workspace", () => ({
-  DashboardWorkspace: () => <p>workspace</p>,
+  DashboardWorkspace: () => (
+    <>
+      <input aria-label="mock search" data-search-input-id="agent-table-search-input" />
+      <p>workspace</p>
+    </>
+  ),
 }));
 
 vi.mock("./shell/dashboard-app-shell", () => ({
@@ -103,7 +108,7 @@ describe("DashboardRoot initial snapshot state", () => {
 
     // Then: the failure is visible rather than masked by the no-data loading branch.
     expect(await screen.findByText(/snapshot unavailable/)).toBeInTheDocument();
-    expect(screen.queryByLabelText("대시보드를 불러오는 중")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Loading dashboard")).not.toBeInTheDocument();
   });
 
   it("keeps cached dashboard data visible when a background refetch fails", async () => {
@@ -177,5 +182,16 @@ describe("DashboardRoot persisted shell filters", () => {
     // Then: selection follows the persisted filter without a persistence echo.
     expect(screen.getByTestId("selected-view")).toHaveTextContent("/repo/cross-tab");
     expect(onUpdateSettings).not.toHaveBeenCalled();
+  });
+});
+
+describe("DashboardRoot keyboard shortcuts", () => {
+  it("focuses the agent search input when slash is pressed outside an editable control", async () => {
+    const user = userEvent.setup();
+    renderRoot(DEFAULT_DASHBOARD_SETTINGS);
+
+    await user.keyboard("/");
+
+    expect(screen.getByRole("textbox", { name: "mock search" })).toHaveFocus();
   });
 });

@@ -36,8 +36,11 @@ export function DashboardSideNav({
   projects,
 }: DashboardSideNavProps) {
   return (
-    <SideNav collapsible={{ isCollapsed, onCollapsedChange, hasButton: true }}>
-      <SideNavSection title="개요" isHeaderHidden>
+    <SideNav
+      aria-label="Primary navigation"
+      collapsible={{ isCollapsed, onCollapsedChange, hasButton: true, buttonLabel: "Collapse navigation" }}
+    >
+      <SideNavSection title="Overview">
         <SideNavItem label="All Agents" icon="viewColumns" isSelected={selectedView === "all"} onClick={onSelectAll} />
         <SideNavItem
           label="Incidents"
@@ -47,7 +50,7 @@ export function DashboardSideNav({
           endContent={incidentCount > 0 ? <Badge variant="error" label={incidentCount} /> : undefined}
         />
       </SideNavSection>
-      <SideNavSection title="프로젝트">
+      <SideNavSection title="Projects">
         {projects.map(({ project, runningCount, errorCount }) => (
           <SideNavItem
             key={project.cwd}
@@ -57,7 +60,7 @@ export function DashboardSideNav({
             endContent={
               <HStack gap={1} vAlign="center">
                 {errorCount > 0 ? <Badge variant="error" label={errorCount} /> : null}
-                <Text type="supporting" hasTabularNumbers>
+                <Text type="code" size="sm" hasTabularNumbers>
                   {runningCount}
                 </Text>
               </HStack>

@@ -6,7 +6,7 @@ import { NO_CONTROL_CHANNEL_REASON, resolveActionAvailability } from "./action-a
 function makeAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: "thread-1",
-    displayName: "메인 세션",
+    displayName: "Main session",
     source: "codex",
     role: "main",
     project: { cwd: "/Users/dev/project", name: "project", repoUrl: null },
@@ -15,7 +15,7 @@ function makeAgent(overrides: Partial<Agent> = {}): Agent {
     model: "gpt-5",
     reasoningEffort: "high",
     status: { kind: "running", startedAt: "2026-07-10T11:00:00.000Z", lastHeartbeatAt: "2026-07-10T11:59:00.000Z" },
-    currentTask: "테스트 실행 중",
+    currentTask: "Running tests",
     tokensUsed: 1000,
     costUsd: null,
     startedAt: "2026-07-10T11:00:00.000Z",
@@ -53,7 +53,7 @@ describe("resolveActionAvailability", () => {
   it.each(PROCESS_SIGNAL_ACTIONS)("disables %s with a reason when no process was observed", (action) => {
     const availability = resolveActionAvailability(makeAgent({ runtimePids: [] }), action);
     expect(availability.isDisabled).toBe(true);
-    expect(availability.reason).toContain("실행 중인 Codex 프로세스");
+    expect(availability.reason).toContain("running Codex process");
   });
 
   it.each(WORKING_DIRECTORY_ACTIONS)("enables %s when the working directory resolves", (action) => {
@@ -61,9 +61,9 @@ describe("resolveActionAvailability", () => {
   });
 
   it.each(WORKING_DIRECTORY_ACTIONS)("disables %s when the agent has no working directory", (action) => {
-    const agent = makeAgent({ project: { cwd: "", name: "(작업 디렉터리 없음)", repoUrl: null } });
+    const agent = makeAgent({ project: { cwd: "", name: "(No working directory)", repoUrl: null } });
     const availability = resolveActionAvailability(agent, action);
     expect(availability.isDisabled).toBe(true);
-    expect(availability.reason).toContain("작업 디렉터리");
+    expect(availability.reason).toContain("working directory");
   });
 });

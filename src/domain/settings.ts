@@ -13,11 +13,11 @@ export const DEFAULT_VISIBLE_COLUMNS = [
   "agent",
   "projectBranch",
   "currentTask",
+  "actions",
   "progress",
   "recentActivity",
   "runningTime",
   "cost",
-  "actions",
 ] as const;
 
 export const OPTIONAL_HIDDEN_COLUMNS = ["model", "tokens", "retryCount", "heartbeat", "runtimeId"] as const;

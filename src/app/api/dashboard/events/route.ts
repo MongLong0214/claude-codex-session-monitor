@@ -102,7 +102,7 @@ export async function GET(request: Request) {
               ...meta(),
               type: "agent_removed",
               entityId: id,
-              payload: { reason: "스냅샷에서 더 이상 관측되지 않습니다." },
+              payload: { reason: "No longer observed in the latest snapshot." },
             });
           }
         }

@@ -426,7 +426,7 @@ describe("describeRolloutEvent", () => {
         type: "event_msg",
         payload: { type: "sub_agent_activity", kind: "interacted", occurred_at_ms: now - 500 },
       }),
-    ).toEqual({ kind: "event", text: "하위 에이전트 최근 활동", timestamp: now - 500 });
+    ).toEqual({ kind: "event", text: "Recent sub-agent activity", timestamp: now - 500 });
   });
 
   it("recognizes a task_complete event as a completion signal", () => {
@@ -436,7 +436,7 @@ describe("describeRolloutEvent", () => {
         type: "event_msg",
         payload: { type: "task_complete" },
       }),
-    ).toEqual({ kind: "completed", text: "작업 완료 신호", timestamp: now - 500 });
+    ).toEqual({ kind: "completed", text: "Task completion signal", timestamp: now - 500 });
   });
 
   it("recognizes the newer task_started event as running activity", () => {
@@ -446,7 +446,7 @@ describe("describeRolloutEvent", () => {
         type: "event_msg",
         payload: { type: "task_started" },
       }),
-    ).toEqual({ kind: "running", text: "작업 시작 신호", timestamp: now - 500 });
+    ).toEqual({ kind: "running", text: "Task start signal", timestamp: now - 500 });
   });
 
   it("recognizes event_msg/error as failed evidence", () => {
@@ -470,8 +470,14 @@ describe("describeRolloutEvent", () => {
   });
 });
 
+/**
+ * These three run the real discovery pipeline (ps/lsof/sqlite3); `ps -Ao …pcpu…` alone can take
+ * 3s+ under desktop load, so the default 5s unit budget flakes. 20s is an integration budget.
+ */
+const DISCOVERY_TEST_TIMEOUT_MS = 20_000;
+
 describe("state database discovery", () => {
-  it("skips a vanished candidate when another valid state database exists", async () => {
+  it("skips a vanished candidate when another valid state database exists", { timeout: DISCOVERY_TEST_TIMEOUT_MS }, async () => {
     const databasePath = await createDatabase(`
       CREATE TABLE threads (id TEXT, updated_at INTEGER, cwd TEXT);
       CREATE TABLE thread_spawn_edges (parent_thread_id TEXT, child_thread_id TEXT, status TEXT);
@@ -489,7 +495,7 @@ describe("state database discovery", () => {
     expect(snapshot.allIds).toContain("valid-root");
   });
 
-  it("rejects a negative cache age after the wall clock moves backward", async () => {
+  it("rejects a negative cache age after the wall clock moves backward", { timeout: DISCOVERY_TEST_TIMEOUT_MS }, async () => {
     const codexHome = await mkdtemp(path.join(tmpdir(), "codex-session-monitor-empty-"));
     const claudeHome = await mkdtemp(path.join(tmpdir(), "claude-session-monitor-empty-"));
     cleanups.push(() => rm(codexHome, { force: true, recursive: true }));
@@ -507,7 +513,7 @@ describe("state database discovery", () => {
     expect(second).not.toBe(first);
   });
 
-  it("skips 257-character thread and edge ids so the snapshot remains schema-valid", async () => {
+  it("skips 257-character thread and edge ids so the snapshot remains schema-valid", { timeout: DISCOVERY_TEST_TIMEOUT_MS }, async () => {
     const invalidId = "x".repeat(257);
     const databasePath = await createDatabase(`
       CREATE TABLE threads (id TEXT, updated_at INTEGER, cwd TEXT);
@@ -634,7 +640,7 @@ describe("activityCandidatesFromTail + selectLatestActivities", () => {
         JSON.stringify({
           timestamp: now - 2_000,
           type: "event_msg",
-          payload: { type: "agent_message", message: "메인 에이전트가 확인했습니다." },
+          payload: { type: "agent_message", message: "Main agent acknowledged." },
         }),
         JSON.stringify({
           timestamp: now - 1_000,
@@ -652,8 +658,8 @@ describe("activityCandidatesFromTail + selectLatestActivities", () => {
 
     const activities = selectLatestActivities(candidates, new Set(["parent-thread", "child-thread"]));
 
-    expect(activities.get("parent-thread")?.text).toBe("메인 에이전트가 확인했습니다.");
-    expect(activities.get("child-thread")?.text).toBe("하위 에이전트 작업 시작");
+    expect(activities.get("parent-thread")?.text).toBe("Main agent acknowledged.");
+    expect(activities.get("child-thread")?.text).toBe("Sub-agent task started");
     expect(activities.get("child-thread")?.timestamp).toBe(now - 500);
   });
 });
@@ -661,9 +667,9 @@ describe("activityCandidatesFromTail + selectLatestActivities", () => {
 describe("selectRootThreads", () => {
   it("picks the live workspace's main session and excludes children and idle workspaces", () => {
     const threads = [
-      thread({ id: "root-live", cwd: "/workspace/live", title: "메인 작업", updatedAt: now - 1_000 }),
-      thread({ id: "child-live", cwd: "/workspace/live", agentNickname: "분석 담당", updatedAt: now - 500 }),
-      thread({ id: "root-old", cwd: "/workspace/old", title: "오래된 작업", updatedAt: now - 86_400_000 }),
+      thread({ id: "root-live", cwd: "/workspace/live", title: "Main task", updatedAt: now - 1_000 }),
+      thread({ id: "child-live", cwd: "/workspace/live", agentNickname: "Analysis", updatedAt: now - 500 }),
+      thread({ id: "root-old", cwd: "/workspace/old", title: "Old task", updatedAt: now - 86_400_000 }),
     ];
     const edges = [edge("root-live", "child-live", "open")];
     const processes = [codexProcess(41, "/workspace/live")];
@@ -702,8 +708,8 @@ describe("buildStateQuery (against a real sqlite state DB)", () => {
         tokens_used INTEGER, agent_nickname TEXT, agent_role TEXT, model TEXT, archived INTEGER
       );
       CREATE TABLE thread_spawn_edges (parent_thread_id TEXT, child_thread_id TEXT, status TEXT);
-      INSERT INTO threads VALUES ('root', '/tmp/root.jsonl', ${now}, '/workspace/live', '메인', 10, '메인', 'main', 'gpt-5', 0);
-      INSERT INTO threads VALUES ('child', '/tmp/child.jsonl', ${now}, '/workspace/live', '하위', 5, '하위', 'subagent', 'gpt-5', 0);
+      INSERT INTO threads VALUES ('root', '/tmp/root.jsonl', ${now}, '/workspace/live', 'Main', 10, 'Main', 'main', 'gpt-5', 0);
+      INSERT INTO threads VALUES ('child', '/tmp/child.jsonl', ${now}, '/workspace/live', 'Child', 5, 'Child', 'subagent', 'gpt-5', 0);
       INSERT INTO thread_spawn_edges VALUES ('root', 'child', 'closed');
     `);
 
@@ -737,8 +743,8 @@ describe("buildStateQuery (against a real sqlite state DB)", () => {
         tokens_used INTEGER, agent_nickname TEXT, agent_role TEXT, model TEXT, archived INTEGER
       );
       CREATE TABLE thread_spawn_edges (parent_thread_id TEXT, child_thread_id TEXT, status TEXT);
-      INSERT INTO threads VALUES ('live-root', NULL, ${now}, '/workspace/current', '현재 메인', 0, NULL, NULL, NULL, 0);
-      INSERT INTO threads VALUES ('live-child', NULL, ${now}, '/workspace/current', '현재 하위', 0, NULL, NULL, NULL, 0);
+      INSERT INTO threads VALUES ('live-root', NULL, ${now}, '/workspace/current', 'Current main', 0, NULL, NULL, NULL, 0);
+      INSERT INTO threads VALUES ('live-child', NULL, ${now}, '/workspace/current', 'Current child', 0, NULL, NULL, NULL, 0);
       INSERT INTO thread_spawn_edges VALUES ('live-root', 'live-child', 'open');
       WITH RECURSIVE number(value) AS (
         SELECT 1
@@ -746,7 +752,7 @@ describe("buildStateQuery (against a real sqlite state DB)", () => {
         SELECT value + 1 FROM number WHERE value < 1500
       )
       INSERT INTO threads
-      SELECT printf('old-%04d', value), NULL, ${now - 86_400_000}, '/workspace/old', '과거 세션', 0, NULL, NULL, NULL, 0
+      SELECT printf('old-%04d', value), NULL, ${now - 86_400_000}, '/workspace/old', 'Past session', 0, NULL, NULL, NULL, 0
       FROM number;
     `);
 

@@ -40,7 +40,7 @@ describe("GET /api/agents/[agentId]/logs", () => {
     // Then
     expect(response.status).toBe(400);
     expect(new TextEncoder().encode(responseBody).byteLength).toBeLessThanOrEqual(256);
-    expect(JSON.parse(responseBody)).toEqual({ error: expect.any(String) });
+    expect(JSON.parse(responseBody)).toEqual({ error: "Invalid limit value." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
     expect(repositories.readLines).not.toHaveBeenCalled();
   });
@@ -56,6 +56,7 @@ describe("GET /api/agents/[agentId]/logs", () => {
 
       // Then
       expect(response.status).toBe(404);
+      expect(await response.json()).toEqual({ error: `Unknown agent: ${agentId}` });
       expect(repositories.readLines).not.toHaveBeenCalled();
     },
   );
@@ -69,6 +70,7 @@ describe("GET /api/agents/[agentId]/logs", () => {
 
     // Then
     expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ error: "Invalid agent ID." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 

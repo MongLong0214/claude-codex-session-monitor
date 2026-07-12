@@ -18,7 +18,7 @@ function rolloutLine(entry: unknown): string {
 const AGENT_MESSAGE = rolloutLine({
   timestamp: "2026-07-10T07:47:46.378Z",
   type: "event_msg",
-  payload: { type: "agent_message", message: "테스트를 실행합니다" },
+  payload: { type: "agent_message", message: "Running tests" },
 });
 
 const TOOL_CALL = rolloutLine({
@@ -111,7 +111,7 @@ describe("logLinesFromTail", () => {
     const { lines, droppedCount } = logLinesFromTail([AGENT_MESSAGE, TOOL_CALL, TASK_COMPLETE].join("\n"), 500);
 
     expect(droppedCount).toBe(0);
-    expect(lines.map((line) => line.text)).toEqual(["테스트를 실행합니다", "도구 실행: exec", "작업 완료 신호"]);
+    expect(lines.map((line) => line.text)).toEqual(["Running tests", "Tool call: exec", "Task completion signal"]);
     expect(lines[0]?.timestamp).toBe("2026-07-10T07:47:46.378Z");
   });
 
@@ -123,7 +123,7 @@ describe("logLinesFromTail", () => {
   it("omits entries the describer has no text for instead of dumping raw JSON", () => {
     const { lines } = logLinesFromTail([REASONING, AGENT_MESSAGE, TOKEN_COUNT].join("\n"), 500);
     expect(lines).toHaveLength(1);
-    expect(lines[0]?.text).toBe("테스트를 실행합니다");
+    expect(lines[0]?.text).toBe("Running tests");
   });
 
   it("skips the truncated leading record and non-JSON noise without throwing", () => {
@@ -135,14 +135,14 @@ describe("logLinesFromTail", () => {
     const { lines, droppedCount } = logLinesFromTail([AGENT_MESSAGE, TOOL_CALL, TASK_COMPLETE].join("\n"), 2);
 
     expect(droppedCount).toBe(1);
-    expect(lines.map((line) => line.text)).toEqual(["도구 실행: exec", "작업 완료 신호"]);
+    expect(lines.map((line) => line.text)).toEqual(["Tool call: exec", "Task completion signal"]);
   });
 
   it("gives colliding timestamps distinct ids so the list never reuses a key", () => {
     const duplicate = rolloutLine({
       timestamp: "2026-07-10T07:47:46.378Z",
       type: "event_msg",
-      payload: { type: "agent_message", message: "두 번째" },
+      payload: { type: "agent_message", message: "Second" },
     });
 
     const { lines } = logLinesFromTail([AGENT_MESSAGE, duplicate].join("\n"), 500);
@@ -150,7 +150,7 @@ describe("logLinesFromTail", () => {
   });
 
   it("assigns same-timestamp ids before slicing so a sliding limit preserves identities", () => {
-    const messages = ["첫 번째", "두 번째", "세 번째"].map((message) =>
+    const messages = ["First", "Second", "Third"].map((message) =>
       rolloutLine({
         timestamp: "2026-07-10T07:47:46.378Z",
         type: "event_msg",

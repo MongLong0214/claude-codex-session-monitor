@@ -25,17 +25,17 @@ export class DashboardPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.table = page.getByRole("table", { name: "에이전트 운영 테이블" });
-    this.searchInput = page.getByRole("textbox", { name: "에이전트 검색" });
+    this.table = page.getByRole("table", { name: "Agent operations table" });
+    this.searchInput = page.getByRole("textbox", { name: "Search agents" });
     // 상태/열 표시 have no `hasSearch`, so MultiSelector's trigger IS the combobox. 프로젝트/브랜치
     // have hasSearch, so the visible trigger is a plain button that reveals a combobox once opened.
-    this.statusFilterTrigger = page.getByRole("combobox", { name: "상태" });
-    this.projectFilterTrigger = page.getByRole("button", { name: "프로젝트" });
-    this.branchFilterTrigger = page.getByRole("button", { name: "브랜치" });
-    this.columnsFilterTrigger = page.getByRole("combobox", { name: "열 표시" });
-    this.densityGroup = page.getByRole("radiogroup", { name: "행 밀도" });
-    this.statusCounters = page.getByRole("list", { name: "에이전트 상태 요약" });
-    this.detailPanel = page.getByRole("complementary", { name: "에이전트 상세" });
+    this.statusFilterTrigger = page.getByRole("combobox", { name: "Status" });
+    this.projectFilterTrigger = page.getByRole("button", { name: "Project", exact: true });
+    this.branchFilterTrigger = page.getByRole("button", { name: "Branch", exact: true });
+    this.columnsFilterTrigger = page.getByRole("combobox", { name: "Columns" });
+    this.densityGroup = page.getByRole("radiogroup", { name: "Row density" });
+    this.statusCounters = page.getByRole("list", { name: "Agent status summary" });
+    this.detailPanel = page.getByRole("complementary", { name: "Agent details" });
   }
 
   async goto(): Promise<void> {
@@ -64,16 +64,20 @@ export class DashboardPage {
   }
 
   detailButton(displayName: string): Locator {
-    return this.page.getByRole("button", { name: `${displayName} 상세 보기` });
+    return this.page.getByRole("button", { name: `${displayName} details` });
   }
 
   async openDetailFor(displayName: string): Promise<void> {
+    // Hundreds of live sessions can virtualize the target row out of the DOM — narrow via search
+    // so the row renders, click, then restore the unfiltered table (panel selection persists).
+    await this.search(displayName);
     await this.detailButton(displayName).first().click();
     await this.detailPanel.waitFor({ state: "visible" });
+    await this.search("");
   }
 
   async closeDetail(): Promise<void> {
-    await this.detailPanel.getByRole("button", { name: "상세 패널 닫기" }).click();
+    await this.detailPanel.getByRole("button", { name: "Close detail panel" }).click();
   }
 
   async search(query: string): Promise<void> {
@@ -87,7 +91,7 @@ export class DashboardPage {
   }
 
   visibleRowCountText(): Locator {
-    return this.page.getByRole("toolbar", { name: "에이전트 테이블 필터" }).locator("text=/\\d+개$/");
+    return this.page.getByRole("toolbar", { name: "Agent table filters" }).locator("text=/\\d+ agents$/");
   }
 
   /**
@@ -97,11 +101,11 @@ export class DashboardPage {
    */
   async getRowCounts(): Promise<{ visible: number; total: number }> {
     const text = (await this.visibleRowCountText().textContent()) ?? "";
-    const filtered = text.match(/^(\d+)\s*\/\s*(\d+)개$/);
+    const filtered = text.match(/^(\d+)\s+of\s+(\d+)\s+agents$/);
     if (filtered) {
       return { visible: Number(filtered[1]), total: Number(filtered[2]) };
     }
-    const unfiltered = text.match(/^(\d+)개$/);
+    const unfiltered = text.match(/^(\d+)\s+agents$/);
     const count = unfiltered ? Number(unfiltered[1]) : 0;
     return { visible: count, total: count };
   }

@@ -2,22 +2,37 @@
   display: flex;
   flex: 1;
   flex-direction: column;
-  min-height: 0;
   height: 100%;
+  min-width: 0;
+  min-height: 0;
   background-color: var(--color-background-surface);
 }
 
 .bulkBar {
-  padding: var(--spacing-1) var(--spacing-3);
-  background-color: var(--color-background-muted);
+  z-index: 2;
+  padding: var(--spacing-2) var(--spacing-3);
+  background-color: var(--color-accent-muted);
   border-bottom: var(--border-width) solid var(--color-border);
+  box-shadow: inset var(--spacing-0-5) 0 0 var(--color-accent);
 }
 
 .scrollContainer {
   position: relative;
   flex: 1;
+  width: 100%;
   min-height: 0;
   overflow: auto;
+  background-color: var(--color-background-body);
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-emphasized) transparent;
+}
+
+.emptyRegion {
+  flex: 1;
+  min-height: 0;
+  padding: var(--spacing-6);
+  background-color: var(--color-background-body);
 }
 
 /*
@@ -28,7 +43,9 @@
  */
 .table {
   display: grid;
+  flex: none;
   min-width: 100%;
+  background-color: var(--color-background-surface);
   border-collapse: separate;
   border-spacing: 0;
 }
@@ -37,7 +54,8 @@
   display: grid;
   position: sticky;
   top: 0;
-  z-index: 3;
+  z-index: 4;
+  box-shadow: var(--shadow-low);
 }
 
 .headerRow {
@@ -81,15 +99,15 @@
 
 .sortButton:focus-visible,
 .detailTrigger:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: 2px;
+  outline: var(--spacing-0-5) solid var(--color-accent);
+  outline-offset: var(--spacing-0-5);
 }
 
 .resizeHandle {
   position: absolute;
   inset-block: 0;
   inset-inline-end: 0;
-  width: 5px;
+  width: var(--spacing-1-5);
   background-color: transparent;
   cursor: col-resize;
   touch-action: none;
@@ -124,19 +142,27 @@
   background-color: var(--color-background-surface);
   background-image: linear-gradient(var(--row-tint), var(--row-tint));
   border-bottom: var(--border-width) solid var(--color-border);
+  transition:
+    background-color var(--duration-fast-min) var(--ease-standard),
+    box-shadow var(--duration-fast-min) var(--ease-standard);
 }
 
 .row:hover {
   --row-tint: var(--color-overlay-hover);
+
+  z-index: 2;
+  box-shadow: var(--shadow-low);
 }
 
 .rowSelected {
   --row-tint: var(--color-accent-muted);
+
+  box-shadow: inset var(--spacing-0-5) 0 0 var(--color-accent);
 }
 
 .row:focus-visible {
-  outline: 2px solid var(--color-accent);
-  outline-offset: -2px;
+  outline: var(--spacing-0-5) solid var(--color-accent);
+  outline-offset: calc(-1 * var(--spacing-0-5));
 }
 
 .td {
@@ -161,9 +187,35 @@
   justify-content: flex-end;
 }
 
-.stackedCell {
+.projectBranchCell {
+  width: 100%;
   min-width: 0;
   overflow: hidden;
+}
+
+.projectName {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--color-text-primary);
+}
+
+.branchChip {
+  flex: 0 1 auto;
+  max-width: 45%;
+  padding-inline: var(--spacing-1);
+  background: var(--color-background-muted);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-inner);
+}
+
+.statusToken {
+  max-width: 100%;
+  min-height: var(--spacing-5);
+  padding-inline: var(--spacing-1-5);
+  overflow: hidden;
+  background: var(--color-background-muted);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
 }
 
 .subagentIndent {
@@ -186,9 +238,24 @@
 }
 
 .detailTrigger:hover {
-  text-decoration: underline;
+  color: var(--color-text-accent);
 }
 
 .actionsCell {
   width: 100%;
+}
+
+.workspaceRemainder {
+  flex: 1 0 auto;
+  min-width: 100%;
+  min-height: calc(var(--spacing-12) * 2);
+  padding: var(--spacing-4);
+  background: var(--color-background-body);
+  border-top: var(--border-width) solid var(--color-border);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .row {
+    transition: none;
+  }
 }

@@ -98,7 +98,7 @@ function toIso(milliseconds: number): string {
 }
 
 function warn(message: string): string {
-  return `Claude Code 세션 읽기 경고: ${message}`;
+  return `Claude Code session warning: ${message}`;
 }
 
 function errorCode(error: unknown): string | null {
@@ -143,7 +143,7 @@ async function readSessionIndex(projectDir: string): Promise<SessionIndexLoad> {
     const missing = error instanceof Error && errorCode(error) === "ENOENT";
     return {
       entries: byId,
-      warning: missing ? null : warn("세션 인덱스를 읽지 못해 메타데이터 없이 표시합니다."),
+      warning: missing ? null : warn("Could not read the session index. Displaying without metadata."),
     };
   }
 
@@ -151,10 +151,10 @@ async function readSessionIndex(projectDir: string): Promise<SessionIndexLoad> {
   try {
     const fileStat = await handle.stat();
     if (!fileStat.isFile()) {
-      return { entries: byId, warning: warn("세션 인덱스가 일반 파일이 아니어서 건너뛰었습니다.") };
+      return { entries: byId, warning: warn("Skipped the session index because it is not a regular file.") };
     }
     if (fileStat.size > MAX_SESSION_INDEX_BYTES) {
-      return { entries: byId, warning: warn("세션 인덱스가 8 MiB 크기 제한을 초과해 건너뛰었습니다.") };
+      return { entries: byId, warning: warn("Skipped the session index because it exceeds the 8 MiB limit.") };
     }
 
     const buffer = Buffer.allocUnsafe(MAX_SESSION_INDEX_BYTES + 1);
@@ -165,11 +165,11 @@ async function readSessionIndex(projectDir: string): Promise<SessionIndexLoad> {
       bytesRead += chunk.bytesRead;
     }
     if (bytesRead > MAX_SESSION_INDEX_BYTES) {
-      return { entries: byId, warning: warn("세션 인덱스가 8 MiB 크기 제한을 초과해 건너뛰었습니다.") };
+      return { entries: byId, warning: warn("Skipped the session index because it exceeds the 8 MiB limit.") };
     }
     raw = buffer.toString("utf8", 0, bytesRead);
   } catch {
-    return { entries: byId, warning: warn("세션 인덱스를 읽지 못해 메타데이터 없이 표시합니다.") };
+    return { entries: byId, warning: warn("Could not read the session index. Displaying without metadata.") };
   } finally {
     await handle.close();
   }
@@ -179,12 +179,12 @@ async function readSessionIndex(projectDir: string): Promise<SessionIndexLoad> {
     parsed = JSON.parse(raw);
   } catch (error) {
     if (!(error instanceof SyntaxError)) throw error;
-    return { entries: byId, warning: warn("세션 인덱스 JSON이 올바르지 않아 메타데이터 없이 표시합니다.") };
+    return { entries: byId, warning: warn("Invalid session index JSON. Displaying without metadata.") };
   }
 
   const entries = toRecord(parsed)?.entries;
   if (!Array.isArray(entries)) {
-    return { entries: byId, warning: warn("세션 인덱스 형식이 올바르지 않아 메타데이터 없이 표시합니다.") };
+    return { entries: byId, warning: warn("Invalid session index format. Displaying without metadata.") };
   }
 
   for (const entry of entries) {
@@ -284,7 +284,7 @@ export function textFromLine(type: string, message: Record<string, unknown> | nu
           return asString(record.text) ?? "";
         }
         if (record?.type === "tool_use") {
-          return `도구 실행: ${asString(record.name) ?? "이름 없는 도구"}`;
+          return `Tool call: ${asString(record.name) ?? "Unnamed tool"}`;
         }
         return "";
       })
@@ -531,7 +531,7 @@ export function pickDisplayName(aiTitle: string | null, firstUserText: string | 
     return chosen;
   }
 
-  return isSubagent ? "이름 없는 서브 에이전트" : "이름 없는 메인 세션";
+  return isSubagent ? "Untitled subagent" : "Untitled main session";
 }
 
 /**
@@ -559,7 +559,7 @@ function projectRefFromCwd(cwd: string | null): ProjectRef {
   const resolved = cwd ? path.resolve(cwd) : "";
   const name = resolved ? path.basename(resolved) : "";
   /** No git-origin URL exists anywhere in Claude Code session data — null is correct, not a gap. */
-  return { cwd: resolved, name: name || "(작업 디렉터리 없음)", repoUrl: null };
+  return { cwd: resolved, name: name || "(No working directory)", repoUrl: null };
 }
 
 interface DiscoveredFile {
@@ -586,7 +586,7 @@ async function discoverActiveFiles(now: number): Promise<DiscoveryResult> {
     const missing = error instanceof Error && errorCode(error) === "ENOENT";
     return {
       files: [],
-      warnings: missing ? [] : [warn("세션 루트 디렉터리를 읽지 못했습니다.")],
+      warnings: missing ? [] : [warn("Could not read the session root directory.")],
     };
   }
 
@@ -594,7 +594,7 @@ async function discoverActiveFiles(now: number): Promise<DiscoveryResult> {
   try {
     projectDirs = await readdir(canonicalRoot, { withFileTypes: true });
   } catch {
-    return { files: [], warnings: [warn("세션 루트 디렉터리를 읽지 못했습니다.")] };
+    return { files: [], warnings: [warn("Could not read the session root directory.")] };
   }
 
   const found: DiscoveredFile[] = [];
@@ -661,19 +661,19 @@ async function discoverActiveFiles(now: number): Promise<DiscoveryResult> {
   );
 
   if (unreadableProjects > 0) {
-    warnings.push(warn(`프로젝트 디렉터리 ${unreadableProjects}개를 읽지 못해 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped unreadable project directories: ${unreadableProjects}.`));
   }
   if (unreadableTranscripts > 0) {
-    warnings.push(warn(`세션 파일 ${unreadableTranscripts}개를 검사하지 못해 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped session files that could not be inspected: ${unreadableTranscripts}.`));
   }
   if (nonRegularTranscripts > 0) {
-    warnings.push(warn(`일반 파일이 아닌 세션 항목 ${nonRegularTranscripts}개를 열지 않고 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped non-regular session entries without opening them: ${nonRegularTranscripts}.`));
   }
   if (oversizedTranscripts > 0) {
-    warnings.push(warn(`세션 파일 ${oversizedTranscripts}개가 64 MiB 크기 제한을 초과해 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped session files over the 64 MiB limit: ${oversizedTranscripts}.`));
   }
   if (invalidSessionIds > 0) {
-    warnings.push(warn(`ID 길이 제한을 벗어난 세션 파일 ${invalidSessionIds}개를 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped session files with out-of-range ID lengths: ${invalidSessionIds}.`));
   }
 
   return { files: found.sort((left, right) => right.mtimeMs - left.mtimeMs), warnings };
@@ -762,7 +762,7 @@ export async function collectClaudeCodeAgents(now: number): Promise<ClaudeCodeCo
     discovered = discovery.files;
     warnings.push(...discovery.warnings);
   } catch {
-    return { agents: [], warnings: [warn("세션 디렉터리를 읽지 못했습니다.")] };
+    return { agents: [], warnings: [warn("Could not read the session directory.")] };
   }
 
   if (discovered.length === 0) {
@@ -770,7 +770,7 @@ export async function collectClaudeCodeAgents(now: number): Promise<ClaudeCodeCo
   }
 
   if (discovered.length > MAX_SESSIONS) {
-    warnings.push(warn(`최근 세션이 ${discovered.length}개로 많아 최신 ${MAX_SESSIONS}개만 표시합니다.`));
+    warnings.push(warn(`Found ${discovered.length} recent sessions; showing the latest ${MAX_SESSIONS}.`));
     discovered = discovered.slice(0, MAX_SESSIONS);
   }
 
@@ -806,15 +806,15 @@ export async function collectClaudeCodeAgents(now: number): Promise<ClaudeCodeCo
   const usable = agents.filter((agent): agent is Agent => agent !== null);
   if (rejectedTranscripts > 0) {
     warnings.push(
-      warn(`세션 파일 ${rejectedTranscripts}개가 64 MiB 크기 제한을 초과하거나 일반 파일이 아니어서 건너뛰었습니다.`),
+      warn(`Skipped session files over 64 MiB or not regular files: ${rejectedTranscripts}.`),
     );
   }
   if (invalidTokenUsages > 0) {
-    warnings.push(warn(`안전한 정수 범위를 벗어난 토큰 사용량이 있는 세션 ${invalidTokenUsages}개를 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped sessions with token usage outside the safe integer range: ${invalidTokenUsages}.`));
   }
   const unreadable = discovered.length - usable.length - rejectedTranscripts - invalidTokenUsages;
   if (unreadable > 0) {
-    warnings.push(warn(`세션 파일 ${unreadable}개를 읽지 못해 건너뛰었습니다.`));
+    warnings.push(warn(`Skipped unreadable session files: ${unreadable}.`));
   }
 
   /** Deterministic order (updatedAt desc, id asc) so the merged snapshot fingerprint is stable. */

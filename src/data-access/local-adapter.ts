@@ -31,7 +31,7 @@ const DIFF_OUTPUT_LIMIT = 2_000;
 const CHILD_PROCESS_TIMEOUT_MS = 5_000;
 
 const NO_CONTROL_CHANNEL_MESSAGE =
-  "이 모니터는 읽기 전용 관찰자입니다. 외부에서 실행된 세션의 stdin/PTY 제어 채널이 없어 이 동작을 수행할 수 없습니다.";
+  "This monitor is a read-only observer. It cannot perform this action because externally started sessions do not expose a stdin/PTY control channel.";
 
 type LegacyStatusKind = "completed" | "failed" | "working" | "observed" | "waiting" | "stale" | "unknown";
 
@@ -259,7 +259,7 @@ function selectedColumn(columns: Set<string>, tableAlias: string, column: string
 }
 
 function databaseWarning(message: string): string {
-  return `Codex 상태 데이터베이스 호환성 경고: ${message}`;
+  return `Codex state database compatibility warning: ${message}`;
 }
 
 function sqlString(value: string): string {
@@ -470,25 +470,27 @@ async function readThreadsAndEdges(
     threadColumns = new Set(threadSchema.map((column) => asString(column.name)).filter((name) => name !== null));
     edgeColumns = new Set(edgeSchema.map((column) => asString(column.name)).filter((name) => name !== null));
   } catch {
-    return { threads: [], edges: [], warnings: [databaseWarning("테이블 구조를 읽지 못했습니다.")] };
+    return { threads: [], edges: [], warnings: [databaseWarning("Unable to read the table schema.")] };
   }
 
   if (!threadColumns.has("id")) {
     return {
       threads: [],
       edges: [],
-      warnings: [databaseWarning("threads.id 열이 없어 세션을 표시할 수 없습니다.")],
+      warnings: [databaseWarning("Cannot display sessions because the threads.id column is missing.")],
     };
   }
 
   const warnings: string[] = [];
   const hasUsableEdges = edgeColumns.has("parent_thread_id") && edgeColumns.has("child_thread_id");
   if (edgeColumns.size > 0 && !hasUsableEdges) {
-    warnings.push(databaseWarning("thread_spawn_edges의 부모/자식 열이 없어 계층을 복원할 수 없습니다."));
+    warnings.push(
+      databaseWarning("Cannot reconstruct the hierarchy because thread_spawn_edges is missing parent/child columns."),
+    );
     edgeColumns = new Set();
   }
   if (edgeColumns.size === 0) {
-    warnings.push(databaseWarning("thread_spawn_edges를 찾지 못해 세션을 최상위로 표시합니다."));
+    warnings.push(databaseWarning("thread_spawn_edges was not found. Sessions are shown as top-level."));
   }
 
   try {
@@ -506,7 +508,7 @@ async function readThreadsAndEdges(
       .filter((edge): edge is EdgeRow => edge !== null);
     return { threads, edges, warnings };
   } catch {
-    return { threads: [], edges: [], warnings: [...warnings, databaseWarning("세션 데이터를 읽지 못했습니다.")] };
+    return { threads: [], edges: [], warnings: [...warnings, databaseWarning("Unable to read session data.")] };
   }
 }
 
@@ -618,15 +620,15 @@ function textFromResponseItem(payload: Record<string, unknown>): string {
   }
 
   if (payload.type === "function_call" || payload.type === "custom_tool_call") {
-    return compactText(`도구 실행: ${asString(payload.name) ?? "이름 없는 도구"}`);
+    return compactText(`Tool call: ${asString(payload.name) ?? "Unnamed tool"}`);
   }
 
   return "";
 }
 
 const SUB_AGENT_ACTIVITY_LABELS: Record<string, string> = {
-  started: "하위 에이전트 작업 시작",
-  interacted: "하위 에이전트 최근 활동",
+  started: "Sub-agent task started",
+  interacted: "Recent sub-agent activity",
 };
 
 export function describeRolloutEvent(entry: Record<string, unknown>): RolloutActivity | null {
@@ -638,21 +640,21 @@ export function describeRolloutEvent(entry: Record<string, unknown>): RolloutAct
   if (entry.type === "event_msg") {
     const eventType = asString(payload.type) ?? asString(entry.event_type);
     if (eventType === "task_complete") {
-      return { kind: "completed", text: "작업 완료 신호", timestamp };
+      return { kind: "completed", text: "Task completion signal", timestamp };
     }
 
     if (eventType === "task_started") {
-      return { kind: "running", text: "작업 시작 신호", timestamp };
+      return { kind: "running", text: "Task start signal", timestamp };
     }
 
     if (eventType === "error") {
-      const text = compactText(asString(payload.message) ?? asString(payload.text) ?? "오류 신호");
+      const text = compactText(asString(payload.message) ?? asString(payload.text) ?? "Error signal");
       return { kind: "failed", text, timestamp };
     }
 
     if (eventType === "sub_agent_activity") {
       const kind = asString(payload.kind);
-      const label = (kind && SUB_AGENT_ACTIVITY_LABELS[kind]) ?? "하위 에이전트 활동";
+      const label = (kind && SUB_AGENT_ACTIVITY_LABELS[kind]) ?? "Sub-agent activity";
       return { kind: "event", text: label, timestamp };
     }
 
@@ -670,7 +672,7 @@ export function describeRolloutEvent(entry: Record<string, unknown>): RolloutAct
   }
 
   if (entry.type === "task_complete" || payload.type === "task_complete") {
-    return { kind: "completed", text: "작업 완료 신호", timestamp };
+    return { kind: "completed", text: "Task completion signal", timestamp };
   }
 
   return null;
@@ -860,7 +862,7 @@ function buildAgentStatus(
   }
 
   if (kind === "failed") {
-    return { kind, error: "Codex rollout 오류 신호", retryCount: 0, failedAt: toIso(lastKnownMs) };
+    return { kind, error: "Codex rollout error signal", retryCount: 0, failedAt: toIso(lastKnownMs) };
   }
 
   if (kind === "stale") {
@@ -887,12 +889,12 @@ function buildProjectRef(thread: ThreadRow): ProjectRef {
   const nameFromRepo = repoUrl ? repoNameFromOriginUrl(repoUrl) : null;
   const name = nameFromRepo ?? (cwd ? path.basename(cwd) : "") ?? "";
 
-  return { cwd, name: name || "(작업 디렉터리 없음)", repoUrl };
+  return { cwd, name: name || "(No working directory)", repoUrl };
 }
 
 function getDisplayTitle(thread: ThreadRow, isRoot: boolean): string {
   return compactText(
-    thread.title ?? thread.agentNickname ?? (isRoot ? "이름 없는 메인 세션" : "이름 없는 서브 에이전트"),
+    thread.title ?? thread.agentNickname ?? (isRoot ? "Untitled main session" : "Untitled sub-agent"),
     120,
   );
 }
@@ -1279,13 +1281,13 @@ async function buildDashboardSnapshot(now: number): Promise<DashboardSnapshot> {
     /** Never rejects (see collectClaudeCodeAgents); a defensive catch keeps Codex agents visible regardless. */
     collectClaudeCodeAgents(now).catch(() => ({
       agents: [],
-      warnings: ["Claude Code 세션 읽기 경고: 세션을 수집하지 못했습니다."],
+      warnings: ["Claude Code session read warning: Unable to collect sessions."],
     })),
   ]);
 
   const codexContent = await (async (): Promise<SnapshotContent> => {
     if (!databasePath) {
-      return emptyContent(["Codex 상태 데이터베이스를 찾지 못했습니다."]);
+      return emptyContent(["Codex state database not found."]);
     }
 
     const { threads, edges, warnings } = await readThreadsAndEdges(databasePath, processes, now);
@@ -1352,7 +1354,7 @@ interface ActionContext {
 }
 
 function truncate(value: string, maxLength: number): string {
-  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}…(생략)`;
+  return value.length <= maxLength ? value : `${value.slice(0, maxLength)}…(truncated)`;
 }
 
 /**
@@ -1395,7 +1397,7 @@ export async function signalAgentProcesses(
     }
   }
   if (pids.length === 0) {
-    return { status: "skipped", message: "실행 중인 프로세스를 찾지 못했습니다." };
+    return { status: "skipped", message: "No running processes found." };
   }
 
   const signaled: number[] = [];
@@ -1416,22 +1418,22 @@ export async function signalAgentProcesses(
   }
 
   if (signaled.length === 0 && failures.length === 0) {
-    return { status: "skipped", message: `이미 종료된 프로세스입니다 (PID ${alreadyExited.join(", ")}).` };
+    return { status: "skipped", message: `Processes have already exited (PIDs ${alreadyExited.join(", ")}).` };
   }
 
   if (signaled.length === 0) {
-    return { status: "failed", message: `${label} 전송에 실패했습니다. ${failures.join("; ")}` };
+    return { status: "failed", message: `Failed to send ${label}. ${failures.join("; ")}` };
   }
 
   const notes = [
-    `작업 디렉터리를 공유하는 Codex 프로세스 ${signaled.length}개에 ${label}를 보냈습니다 (PID ${signaled.join(", ")}).`,
-    "세션과 프로세스의 직접 매핑이 없어 같은 디렉터리의 다른 세션도 함께 영향을 받을 수 있습니다.",
+    `Sent ${label} to ${signaled.length} Codex processes sharing the working directory (PIDs ${signaled.join(", ")}).`,
+    "Sessions are not mapped directly to processes, so other sessions in the same directory may also be affected.",
   ];
   if (alreadyExited.length > 0) {
-    notes.push(`이미 종료된 PID ${alreadyExited.join(", ")}는 건너뛰었습니다.`);
+    notes.push(`Skipped PIDs that had already exited: ${alreadyExited.join(", ")}.`);
   }
   if (failures.length > 0) {
-    notes.push(`일부 실패: ${failures.join("; ")}`);
+    notes.push(`Some signals failed: ${failures.join("; ")}`);
   }
 
   return { status: "success", message: notes.join(" ") };
@@ -1444,13 +1446,13 @@ export async function signalAgentProcesses(
 async function resolveWorkingDirectory(agent: Agent): Promise<string> {
   const cwd = agent.project.cwd;
   if (!cwd) {
-    throw new Error("에이전트의 작업 디렉터리를 확인할 수 없습니다.");
+    throw new Error("Cannot determine the agent's working directory.");
   }
 
   const canonical = await realpath(cwd);
   const stats = await stat(canonical);
   if (!stats.isDirectory()) {
-    throw new Error(`작업 디렉터리가 아닙니다: ${canonical}`);
+    throw new Error(`Not a working directory: ${canonical}`);
   }
 
   return canonical;
@@ -1473,7 +1475,7 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
     }
     return {
       status: "success",
-      message: `OS 레벨 프로세스 일시정지(SIGSTOP)를 보냈습니다. Codex 자체의 pause 기능이 아닙니다. ${outcome.message}`,
+      message: `Sent an OS-level process pause (SIGSTOP). This is not Codex's native pause action. ${outcome.message}`,
     };
   },
 
@@ -1484,7 +1486,7 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
     }
     return {
       status: "success",
-      message: `OS 레벨 프로세스 재개(SIGCONT)를 보냈습니다. Codex 자체의 resume 기능이 아닙니다. ${outcome.message}`,
+      message: `Sent an OS-level process resume (SIGCONT). This is not Codex's native resume action. ${outcome.message}`,
     };
   },
 
@@ -1496,9 +1498,9 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
     try {
       const cwd = await resolveWorkingDirectory(agent);
       await run("open", ["-a", "Terminal", cwd]);
-      return { status: "success", message: `터미널에서 ${cwd}를 열었습니다.` };
+      return { status: "success", message: `Opened ${cwd} in Terminal.` };
     } catch (error) {
-      return { status: "failed", message: `터미널을 열지 못했습니다: ${errorMessage(error)}` };
+      return { status: "failed", message: `Could not open Terminal: ${errorMessage(error)}` };
     }
   },
 
@@ -1509,10 +1511,10 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
       const output = stdout.trimEnd();
       return {
         status: "success",
-        message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "변경 사항이 없습니다.",
+        message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "No changes.",
       };
     } catch (error) {
-      return { status: "failed", message: `diff를 읽지 못했습니다: ${errorMessage(error)}` };
+      return { status: "failed", message: `Could not read the diff: ${errorMessage(error)}` };
     }
   },
 
@@ -1521,9 +1523,9 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
       const cwd = await resolveWorkingDirectory(agent);
       const stdout = await runCommand("gh", ["pr", "create", "--fill"], { cwd });
       const output = stdout.trim();
-      return { status: "success", message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "PR을 생성했습니다." };
+      return { status: "success", message: output ? truncate(output, DIFF_OUTPUT_LIMIT) : "Created the PR." };
     } catch (error) {
-      return { status: "failed", message: `PR을 생성하지 못했습니다: ${errorMessage(error)}` };
+      return { status: "failed", message: `Could not create the PR: ${errorMessage(error)}` };
     }
   },
 
@@ -1531,9 +1533,9 @@ export const ACTION_HANDLERS: Record<AgentActionType, (context: ActionContext) =
     try {
       const cwd = await resolveWorkingDirectory(agent);
       await runCommand("gh", ["pr", "view", "--web"], { cwd });
-      return { status: "success", message: "브라우저에서 PR을 열었습니다." };
+      return { status: "success", message: "Opened the PR in the browser." };
     } catch (error) {
-      return { status: "failed", message: `PR을 열지 못했습니다: ${errorMessage(error)}` };
+      return { status: "failed", message: `Could not open the PR: ${errorMessage(error)}` };
     }
   },
 };
@@ -1546,7 +1548,7 @@ async function execute(
   const snapshot = await getSnapshot();
   const agent = snapshot.byId[agentId];
   if (!agent) {
-    return { agentId, action: request.action, status: "skipped", message: "등록되지 않은 에이전트입니다." };
+    return { agentId, action: request.action, status: "skipped", message: "Unknown agent." };
   }
 
   try {

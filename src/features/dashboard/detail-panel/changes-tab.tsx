@@ -23,7 +23,7 @@ function DiffOutput({ result }: { result: AgentActionResult }) {
     <Banner
       container="section"
       status={result.status === "skipped" ? "warning" : "error"}
-      title="변경 사항을 확인할 수 없습니다"
+      title="Could not inspect changes"
       description={result.message}
     />
   );
@@ -72,7 +72,7 @@ export function ChangesTab({ agent }: { agent: Agent }) {
     <VStack gap={3}>
       <HStack gap={1} wrap="wrap" vAlign="center">
         <Button
-          label="새로고침"
+          label="Refresh"
           size="sm"
           variant="secondary"
           isDisabled={diffAvailability.isDisabled || diff.isPending}
@@ -80,39 +80,39 @@ export function ChangesTab({ agent }: { agent: Agent }) {
           {...(diffAvailability.reason ? { tooltip: diffAvailability.reason } : {})}
           onClick={() => diff.mutate({ agentId: agent.id, request: { action: "view_diff" } })}
         />
-        {renderPullRequestAction("create_pr", "PR 생성")}
-        {renderPullRequestAction("open_pr", "PR 열기")}
+        {renderPullRequestAction("create_pr", "Create PR")}
+        {renderPullRequestAction("open_pr", "Open PR")}
       </HStack>
 
       <Text type="supporting" as="p">
-        {agent.branch ? `브랜치 ${agent.branch} ` : ""}작업 트리의 git status --short 결과입니다. 조회 시점의 상태이며 실시간으로
-        갱신되지 않습니다.
+        {agent.branch ? `Branch ${agent.branch}. ` : ""}This is the working tree output from git status --short. It is a point-in-time
+        snapshot and does not update in real time.
       </Text>
 
       {/* gh can be missing, unauthenticated, or have nothing to PR — surface its real message. */}
       {pullRequest.error ? (
-        <Banner container="section" status="error" title="요청을 보내지 못했습니다" description={pullRequest.error.message} />
+        <Banner container="section" status="error" title="Could not send request" description={pullRequest.error.message} />
       ) : null}
 
       {pullRequest.data && !pullRequest.error ? (
         <Banner
           container="section"
           status={pullRequest.data.status === "success" ? "success" : "error"}
-          title={pullRequest.data.status === "success" ? "완료" : "실패"}
+          title={pullRequest.data.status === "success" ? "Completed" : "Failed"}
           description={pullRequest.data.message}
         />
       ) : null}
 
-      {diff.isPending ? <Spinner size="md" label="변경 사항을 읽는 중" /> : null}
+      {diff.isPending ? <Spinner size="md" label="Reading changes" /> : null}
 
       {diff.error ? (
-        <Banner container="section" status="error" title="작업 트리 상태를 불러오지 못했습니다" description={diff.error.message} />
+        <Banner container="section" status="error" title="Could not load working tree status" description={diff.error.message} />
       ) : null}
 
       {diff.data && !diff.isPending && !diff.error ? <DiffOutput result={diff.data} /> : null}
 
       {!diff.data && !diff.isPending && !diff.error ? (
-        <EmptyState isCompact title="변경 사항을 불러오지 않았습니다" description="새로고침을 눌러 현재 작업 트리 상태를 확인하세요." />
+        <EmptyState isCompact title="Changes not loaded" description="Refresh to inspect the current working tree." />
       ) : null}
     </VStack>
   );

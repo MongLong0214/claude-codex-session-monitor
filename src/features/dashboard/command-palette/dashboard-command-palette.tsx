@@ -74,7 +74,7 @@ export function DashboardCommandPalette({
               type: result.status === "failed" ? "error" : "info",
               uniqueID: `${result.agentId}:${result.action}`,
             }),
-          onError: (error) => showToast({ body: `작업을 실행하지 못했습니다: ${error.message}`, type: "error" }),
+          onError: (error) => showToast({ body: `Unable to run action: ${error.message}`, type: "error" }),
         },
       );
     },
@@ -96,7 +96,7 @@ export function DashboardCommandPalette({
             type: result.status === "failed" ? "error" : "info",
             uniqueID: `${result.agentId}:${result.action}`,
           }),
-        onError: (error) => showToast({ body: `중지 요청을 보내지 못했습니다: ${error.message}`, type: "error" }),
+        onError: (error) => showToast({ body: `Unable to send stop request: ${error.message}`, type: "error" }),
       },
     );
   }, [stopTarget, runAgentAction, showToast]);
@@ -143,9 +143,9 @@ export function DashboardCommandPalette({
         onOpenChange={onOpenChange}
         searchSource={searchSource}
         onValueChange={handleValueChange}
-        label="명령 팔레트"
-        emptySearchText="검색 결과가 없습니다"
-        emptyBootstrapText="표시할 항목이 없습니다"
+        label="Command palette"
+        emptySearchText="No results found"
+        emptyBootstrapText="No commands available"
       />
 
       <AlertDialog
@@ -155,10 +155,10 @@ export function DashboardCommandPalette({
             setStopTarget(null);
           }
         }}
-        title={stopTarget ? `${stopTarget.displayName} 중지` : "에이전트 중지"}
+        title={stopTarget ? `Stop ${stopTarget.displayName}` : "Stop agent"}
         description={STOP_DIALOG_DESCRIPTION}
-        actionLabel="중지"
-        cancelLabel="취소"
+        actionLabel="Stop"
+        cancelLabel="Cancel"
         actionVariant="destructive"
         isActionLoading={isActionPending}
         onAction={confirmStop}

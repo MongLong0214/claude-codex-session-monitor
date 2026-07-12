@@ -31,21 +31,21 @@ const END_ALIGNED_COLUMN_IDS: readonly string[] = ["runningTime", "cost", "token
 const DEFAULT_COLUMN_SIZE = 150;
 
 export const COLUMN_LABELS: Record<AgentTableColumnId, string> = {
-  select: "선택",
-  status: "상태",
-  agent: "에이전트",
-  projectBranch: "프로젝트 / 브랜치",
-  currentTask: "현재 작업",
-  progress: "진행",
-  recentActivity: "최근 활동",
-  runningTime: "실행 시간",
-  cost: "비용",
-  model: "모델",
-  tokens: "토큰",
-  retryCount: "재시도",
-  heartbeat: "하트비트",
+  select: "Select",
+  status: "Status",
+  agent: "Agent",
+  projectBranch: "Project / branch",
+  currentTask: "Current task",
+  progress: "Activity",
+  recentActivity: "Updated",
+  runningTime: "Runtime",
+  cost: "Cost",
+  model: "Model",
+  tokens: "Tokens",
+  retryCount: "Retries",
+  heartbeat: "Heartbeat",
   runtimeId: "PID",
-  actions: "작업",
+  actions: "Actions",
 };
 
 /**
@@ -58,28 +58,32 @@ export const COLUMN_LABELS: Record<AgentTableColumnId, string> = {
  * columns.test.ts fails if the two drift apart.
  */
 const BASE_COLUMNS: ColumnDef<AgentId>[] = [
-  { id: "select", header: COLUMN_LABELS.select, size: 44, enableResizing: false, enableHiding: false },
-  { id: "status", header: COLUMN_LABELS.status, size: 116, minSize: 96, enableHiding: false },
-  { id: "agent", header: COLUMN_LABELS.agent, size: 240, minSize: 140, enableHiding: false },
-  { id: "projectBranch", header: COLUMN_LABELS.projectBranch, size: 200, minSize: 120 },
-  { id: "currentTask", header: COLUMN_LABELS.currentTask, size: 320, minSize: 140 },
-  { id: "progress", header: COLUMN_LABELS.progress, size: 120, minSize: 80 },
-  { id: "recentActivity", header: COLUMN_LABELS.recentActivity, size: 140, minSize: 100 },
-  { id: "runningTime", header: COLUMN_LABELS.runningTime, size: 108, minSize: 80 },
-  { id: "cost", header: COLUMN_LABELS.cost, size: 96, minSize: 72 },
-  { id: "model", header: COLUMN_LABELS.model, size: 150, minSize: 100 },
-  { id: "tokens", header: COLUMN_LABELS.tokens, size: 100, minSize: 72 },
-  { id: "retryCount", header: COLUMN_LABELS.retryCount, size: 88, minSize: 72 },
-  { id: "heartbeat", header: COLUMN_LABELS.heartbeat, size: 140, minSize: 100 },
-  { id: "runtimeId", header: COLUMN_LABELS.runtimeId, size: 120, minSize: 80 },
-  { id: "actions", header: COLUMN_LABELS.actions, size: 96, enableResizing: false, enableHiding: false },
+  { id: "select", header: COLUMN_LABELS.select, size: 36, enableResizing: false, enableHiding: false },
+  { id: "status", header: COLUMN_LABELS.status, size: 104, minSize: 96, enableHiding: false },
+  { id: "agent", header: COLUMN_LABELS.agent, size: 180, minSize: 140, enableHiding: false },
+  { id: "projectBranch", header: COLUMN_LABELS.projectBranch, size: 208, minSize: 140 },
+  { id: "currentTask", header: COLUMN_LABELS.currentTask, size: 340, minSize: 160 },
+  { id: "actions", header: COLUMN_LABELS.actions, size: 112, enableResizing: false, enableHiding: false },
+  { id: "progress", header: COLUMN_LABELS.progress, size: 80, minSize: 64 },
+  { id: "recentActivity", header: COLUMN_LABELS.recentActivity, size: 96, minSize: 80 },
+  { id: "runningTime", header: COLUMN_LABELS.runningTime, size: 88, minSize: 72 },
+  { id: "cost", header: COLUMN_LABELS.cost, size: 76, minSize: 64 },
+  { id: "model", header: COLUMN_LABELS.model, size: 128, minSize: 96 },
+  { id: "tokens", header: COLUMN_LABELS.tokens, size: 88, minSize: 72 },
+  { id: "retryCount", header: COLUMN_LABELS.retryCount, size: 72, minSize: 64 },
+  { id: "heartbeat", header: COLUMN_LABELS.heartbeat, size: 96, minSize: 80 },
+  { id: "runtimeId", header: COLUMN_LABELS.runtimeId, size: 96, minSize: 72 },
 ];
 
 /** `enableSorting` is derived from the comparator table, so a column can never claim a sort it lacks. */
-export const agentTableColumns: ColumnDef<AgentId>[] = BASE_COLUMNS.map((column) => ({
-  ...column,
-  enableSorting: isSortableColumn(column.id ?? ""),
-}));
+export const agentTableColumns: ColumnDef<AgentId>[] = BASE_COLUMNS.map((column) => {
+  const enableSorting = isSortableColumn(column.id ?? "");
+  return {
+    ...column,
+    enableSorting,
+    ...(enableSorting ? { accessorFn: (agentId: AgentId) => agentId } : {}),
+  };
+});
 
 /**
  * VisibilityState only needs the `false` entries; anything absent is visible. Model, tokens,

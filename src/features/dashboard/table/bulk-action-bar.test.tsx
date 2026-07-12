@@ -6,7 +6,7 @@ import { BulkActionBar } from "./bulk-action-bar";
 describe("BulkActionBar", () => {
   it("renders the selected count", () => {
     render(<BulkActionBar selectedCount={3} isPending={false} onAction={vi.fn()} onClearSelection={vi.fn()} />);
-    expect(screen.getByText("3개 선택됨")).toBeInTheDocument();
+    expect(screen.getByText("3 selected")).toBeInTheDocument();
   });
 
   it("calls onAction with the clicked action's type", async () => {
@@ -14,10 +14,10 @@ describe("BulkActionBar", () => {
     const onAction = vi.fn();
     render(<BulkActionBar selectedCount={2} isPending={false} onAction={onAction} onClearSelection={vi.fn()} />);
 
-    await user.click(screen.getByRole("button", { name: "일시정지" }));
+    await user.click(screen.getByRole("button", { name: "Pause" }));
     expect(onAction).toHaveBeenCalledExactlyOnceWith("pause");
 
-    await user.click(screen.getByRole("button", { name: "중지" }));
+    await user.click(screen.getByRole("button", { name: "Stop" }));
     expect(onAction).toHaveBeenLastCalledWith("stop");
   });
 
@@ -26,21 +26,21 @@ describe("BulkActionBar", () => {
     const onClearSelection = vi.fn();
     render(<BulkActionBar selectedCount={1} isPending={false} onAction={vi.fn()} onClearSelection={onClearSelection} />);
 
-    await user.click(screen.getByRole("button", { name: "선택 해제" }));
+    await user.click(screen.getByRole("button", { name: "Clear selection" }));
     expect(onClearSelection).toHaveBeenCalledOnce();
   });
 
   it("disables every bulk action button while a bulk mutation is pending", () => {
     render(<BulkActionBar selectedCount={2} isPending onAction={vi.fn()} onClearSelection={vi.fn()} />);
 
-    expect(screen.getByRole("button", { name: "일시정지" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "재개" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "재시도" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "중지" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Pause" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Retry" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
   });
 
   it("keeps the clear-selection button enabled while a bulk mutation is pending", () => {
     render(<BulkActionBar selectedCount={2} isPending onAction={vi.fn()} onClearSelection={vi.fn()} />);
-    expect(screen.getByRole("button", { name: "선택 해제" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Clear selection" })).toBeEnabled();
   });
 });

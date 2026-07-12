@@ -1,9 +1,12 @@
 "use client";
 
 import { useImperativeAlertDialog } from "@astryxdesign/core/AlertDialog";
+import { Button } from "@astryxdesign/core/Button";
+import { Center } from "@astryxdesign/core/Center";
 import { CheckboxInput } from "@astryxdesign/core/CheckboxInput";
 import { EmptyState } from "@astryxdesign/core/EmptyState";
 import { Icon } from "@astryxdesign/core/Icon";
+import { VStack } from "@astryxdesign/core/Stack";
 import { Text } from "@astryxdesign/core/Text";
 import { useToast } from "@astryxdesign/core/Toast";
 import { getCoreRowModel, useReactTable, type Header } from "@tanstack/react-table";
@@ -120,7 +123,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
   const { mutate: runBulkAgentAction, isPending: isBulkActionPending } = useBulkAgentAction();
   const { element: stopDialog, hide: hideStopDialog, show: showStopDialog } = useImperativeAlertDialog();
 
-  const scrollElementRef = useRef<HTMLDivElement>(null);
+  const scrollElementRef = useRef<HTMLElement>(null);
   const dataRef = useRef(data);
   const [focusedRowIndex, setFocusedRowIndex] = useState(0);
   const isFocusPendingRef = useRef(false);
@@ -162,7 +165,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
   });
 
   const rowHeight = ROW_HEIGHT_PX[density];
-  const virtualizer = useVirtualizer<HTMLDivElement, HTMLTableRowElement>({
+  const virtualizer = useVirtualizer<HTMLElement, HTMLTableRowElement>({
     count: visibleAgentIds.length,
     getScrollElement: () => scrollElementRef.current,
     // Rows are a fixed height, so this is exact rather than an estimate — no measurement pass.
@@ -210,7 +213,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
               type: result.status === "failed" ? "error" : "info",
               uniqueID: `${result.agentId}:${result.action}`,
             }),
-          onError: (error) => showToast({ body: `작업을 실행하지 못했습니다: ${error.message}`, type: "error" }),
+          onError: (error) => showToast({ body: `Could not run action: ${error.message}`, type: "error" }),
         },
       );
     },
@@ -222,8 +225,8 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
       showStopDialog({
         title,
         description: STOP_DIALOG_DESCRIPTION,
-        actionLabel: "중지",
-        cancelLabel: "취소",
+        actionLabel: "Stop",
+        cancelLabel: "Cancel",
         actionVariant: "destructive",
         onAction: () => {
           hideStopDialog();
@@ -241,7 +244,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
         return;
       }
 
-      requestStopConfirmation(`${dataRef.current?.byId[agentId]?.displayName ?? "에이전트"} 중지`, () =>
+      requestStopConfirmation(`Stop ${dataRef.current?.byId[agentId]?.displayName ?? "agent"}`, () =>
         executeRowAction(agentId, "stop"),
       );
     },
@@ -330,11 +333,11 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
             const failed = results.filter((result) => result.status === "failed").length;
             const skipped = results.filter((result) => result.status === "skipped").length;
             showToast({
-              body: `${succeeded}건 성공 · ${failed}건 실패 · ${skipped}건 건너뜀`,
+              body: `${succeeded} succeeded · ${failed} failed · ${skipped} skipped`,
               type: failed > 0 ? "error" : "info",
             });
           },
-          onError: (error) => showToast({ body: `일괄 작업에 실패했습니다: ${error.message}`, type: "error" }),
+          onError: (error) => showToast({ body: `Bulk action failed: ${error.message}`, type: "error" }),
         },
       );
     },
@@ -351,7 +354,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
         return;
       }
 
-      requestStopConfirmation(`선택한 에이전트 ${selectedAgentIds.length}개 중지`, () =>
+      requestStopConfirmation(`Stop ${selectedAgentIds.length} selected agents`, () =>
         executeBulkAction(selectedAgentIds, "stop"),
       );
     },
@@ -369,7 +372,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
   const activeRowIndex = visibleAgentIds.length === 0 ? -1 : Math.min(focusedRowIndex, visibleAgentIds.length - 1);
 
   return (
-    <div className={styles.root}>
+    <VStack className={styles.root} gap={0}>
       <TableToolbar
         tableState={tableState}
         projects={data.projects ?? EMPTY_PROJECTS}
@@ -388,20 +391,27 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
       ) : null}
 
       {visibleAgentIds.length === 0 ? (
-        <EmptyState
-          title="표시할 에이전트가 없습니다"
-          description={
-            tableState.hasActiveFilters
-              ? "필터 조건에 맞는 에이전트가 없습니다. 필터를 초기화해 보세요."
-              : "실행 중인 세션이 감지되지 않았습니다."
-          }
-          icon={<Icon icon="search" size="lg" color="disabled" />}
-        />
+        <Center height="100%" className={styles.emptyRegion}>
+          <EmptyState
+            title={tableState.hasActiveFilters ? "No matching agents" : "No sessions detected"}
+            description={
+              tableState.hasActiveFilters
+                ? "No agents match the current filters. Clear them to restore the full session list."
+                : "Start a Codex or Claude Code session and it will appear here automatically."
+            }
+            icon={<Icon icon={tableState.hasActiveFilters ? "search" : "viewColumns"} size="lg" color="disabled" />}
+            actions={
+              tableState.hasActiveFilters ? (
+                <Button label="Clear filters" variant="secondary" onClick={tableState.resetFilters} />
+              ) : undefined
+            }
+          />
+        </Center>
       ) : (
-        <div className={styles.scrollContainer} ref={scrollElementRef}>
+        <VStack className={styles.scrollContainer} gap={0} ref={scrollElementRef}>
           <table
             role="table"
-            aria-label="에이전트 운영 테이블"
+            aria-label="Agent operations table"
             aria-rowcount={visibleAgentIds.length + 1}
             className={styles.table}
             style={{ "--row-height": `${rowHeight}px`, width: getTableWidth(columnLayout) } as CSSProperties}
@@ -423,7 +433,7 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
                     >
                       {column.id === "select" ? (
                         <CheckboxInput
-                          label="필터에 해당하는 모든 에이전트 선택"
+                          label="Select all filtered agents"
                           isLabelHidden
                           size="sm"
                           value={
@@ -436,14 +446,23 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
                           onChange={(checked) => table.toggleAllRowsSelected(checked)}
                         />
                       ) : canSort && header ? (
-                        <button type="button" className={styles.sortButton} onClick={header.column.getToggleSortingHandler()}>
+                        <button
+                          type="button"
+                          className={styles.sortButton}
+                          title={String(header.column.columnDef.header ?? column.id)}
+                          onClick={header.column.getToggleSortingHandler()}
+                        >
                           <Text type="supporting" weight="medium" maxLines={1}>
                             {String(header.column.columnDef.header ?? column.id)}
                           </Text>
                           {sortIconOf(header)}
                         </button>
                       ) : (
-                        <Text type="supporting" weight="medium" maxLines={1}>
+                        <Text
+                          type="supporting"
+                          weight="medium"
+                          maxLines={1}
+                        >
                           {String(header?.column.columnDef.header ?? column.id)}
                         </Text>
                       )}
@@ -489,10 +508,15 @@ function OperationsTableContent({ tableState, onOpenDetail }: OperationsTablePro
               })}
             </tbody>
           </table>
-        </div>
+          <Center className={styles.workspaceRemainder}>
+            <Text type="code" size="sm" color="secondary" hasTabularNumbers maxLines={1}>
+              {visibleAgentIds.length} sessions in view · Select an agent name to inspect telemetry
+            </Text>
+          </Center>
+        </VStack>
       )}
 
       {stopDialog}
-    </div>
+    </VStack>
   );
 }

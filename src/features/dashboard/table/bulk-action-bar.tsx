@@ -7,10 +7,10 @@ import type { AgentActionType } from "@/domain/agent/actions";
 import styles from "./operations-table.module.css";
 
 const BULK_ACTIONS: { action: AgentActionType; label: string; variant: "secondary" | "destructive" }[] = [
-  { action: "pause", label: "일시정지", variant: "secondary" },
-  { action: "resume", label: "재개", variant: "secondary" },
-  { action: "retry", label: "재시도", variant: "secondary" },
-  { action: "stop", label: "중지", variant: "destructive" },
+  { action: "pause", label: "Pause", variant: "secondary" },
+  { action: "resume", label: "Resume", variant: "secondary" },
+  { action: "retry", label: "Retry", variant: "secondary" },
+  { action: "stop", label: "Stop", variant: "destructive" },
 ];
 
 interface BulkActionBarProps {
@@ -27,9 +27,17 @@ interface BulkActionBarProps {
  */
 export function BulkActionBar({ selectedCount, isPending, onAction, onClearSelection }: BulkActionBarProps) {
   return (
-    <HStack className={styles.bulkBar} gap={2} vAlign="center" role="region" aria-label="선택한 에이전트 일괄 작업">
-      <Text type="label" hasTabularNumbers>
-        {selectedCount}개 선택됨
+    <HStack
+      className={styles.bulkBar}
+      gap={2}
+      vAlign="center"
+      hAlign="between"
+      wrap="wrap"
+      role="region"
+      aria-label="Bulk actions for selected agents"
+    >
+      <Text type="code" size="sm" weight="medium" hasTabularNumbers>
+        {selectedCount} selected
       </Text>
       <HStack gap={1} vAlign="center">
         {BULK_ACTIONS.map((bulkAction) => (
@@ -43,7 +51,7 @@ export function BulkActionBar({ selectedCount, isPending, onAction, onClearSelec
           />
         ))}
       </HStack>
-      <Button label="선택 해제" variant="ghost" size="sm" onClick={onClearSelection} />
+      <Button label="Clear selection" variant="ghost" size="sm" onClick={onClearSelection} />
     </HStack>
   );
 }

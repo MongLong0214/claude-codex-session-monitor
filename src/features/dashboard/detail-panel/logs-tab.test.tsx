@@ -58,7 +58,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(fetchAgentLogs).mockResolvedValue({
     agentId: AGENT_ID,
-    lines: [{ id: "1", timestamp: "2026-07-10T12:00:00.000Z", level: "info", text: "테스트 로그" }],
+    lines: [{ id: "1", timestamp: "2026-07-10T12:00:00.000Z", level: "info", text: "Test log" }],
     isTruncated: false,
   });
 });
@@ -69,28 +69,28 @@ describe("LogsTab copy", () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText");
     writeText.mockResolvedValue();
     renderLogsTab();
-    await screen.findByText("테스트 로그");
+    await screen.findByText("Test log");
 
-    await user.click(screen.getByRole("button", { name: "복사" }));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledExactlyOnceWith("2026-07-10T12:00:00.000Z\t테스트 로그");
+      expect(writeText).toHaveBeenCalledExactlyOnceWith("2026-07-10T12:00:00.000Z\tTest log");
     });
-    expect(await screen.findByRole("button", { name: "복사됨" })).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
   it("shows an error banner when the clipboard write is rejected", async () => {
     const user = userEvent.setup();
     const writeText = vi.spyOn(navigator.clipboard, "writeText");
-    writeText.mockRejectedValue(new Error("클립보드 권한이 없습니다."));
+    writeText.mockRejectedValue(new Error("Clipboard permission denied."));
     renderLogsTab();
-    await screen.findByText("테스트 로그");
+    await screen.findByText("Test log");
 
-    await user.click(screen.getByRole("button", { name: "복사" }));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
-    expect(await screen.findByText("로그를 복사하지 못했습니다")).toBeInTheDocument();
-    expect(screen.getByText("클립보드 권한이 없습니다.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "복사" })).toBeInTheDocument();
+    expect(await screen.findByText("Could not copy logs")).toBeInTheDocument();
+    expect(screen.getByText("Clipboard permission denied.")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 
   it("keeps newer success feedback when an older clipboard write rejects later", async () => {
@@ -100,20 +100,20 @@ describe("LogsTab copy", () => {
     const writeText = vi.spyOn(navigator.clipboard, "writeText");
     writeText.mockReturnValueOnce(olderWrite.promise).mockResolvedValueOnce();
     renderLogsTab();
-    await screen.findByText("테스트 로그");
+    await screen.findByText("Test log");
 
     // When
-    await user.click(screen.getByRole("button", { name: "복사" }));
-    await user.click(screen.getByRole("button", { name: "복사" }));
-    expect(await screen.findByRole("button", { name: "복사됨" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
     await act(async () => {
-      olderWrite.reject(new Error("뒤늦은 실패"));
+      olderWrite.reject(new Error("Late failure"));
       await Promise.resolve();
     });
 
     // Then
-    expect(screen.getByRole("button", { name: "복사됨" })).toBeInTheDocument();
-    expect(screen.queryByText("로그를 복사하지 못했습니다")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(screen.queryByText("Could not copy logs")).not.toBeInTheDocument();
   });
 
   it("clears settled copy feedback when the selected agent changes", async () => {
@@ -121,16 +121,16 @@ describe("LogsTab copy", () => {
     const user = userEvent.setup();
     vi.spyOn(navigator.clipboard, "writeText").mockResolvedValue();
     const view = renderLogsTab();
-    await screen.findByText("테스트 로그");
-    await user.click(screen.getByRole("button", { name: "복사" }));
-    expect(await screen.findByRole("button", { name: "복사됨" })).toBeInTheDocument();
+    await screen.findByText("Test log");
+    await user.click(screen.getByRole("button", { name: "Copy" }));
+    expect(await screen.findByRole("button", { name: "Copied" })).toBeInTheDocument();
 
     // When
     view.rerenderAgent(NEXT_AGENT_ID);
 
     // Then
-    expect(await screen.findByRole("button", { name: "복사" })).toBeInTheDocument();
-    expect(screen.queryByText("로그를 복사하지 못했습니다")).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.queryByText("Could not copy logs")).not.toBeInTheDocument();
   });
 
   it("ignores a pending clipboard completion after the selected agent changes", async () => {
@@ -139,19 +139,19 @@ describe("LogsTab copy", () => {
     const oldWrite = deferred<void>();
     vi.spyOn(navigator.clipboard, "writeText").mockReturnValue(oldWrite.promise);
     const view = renderLogsTab();
-    await screen.findByText("테스트 로그");
-    await user.click(screen.getByRole("button", { name: "복사" }));
+    await screen.findByText("Test log");
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
     // When
     view.rerenderAgent(NEXT_AGENT_ID);
-    await waitFor(() => expect(screen.getByRole("button", { name: "복사" })).toBeEnabled());
+    await waitFor(() => expect(screen.getByRole("button", { name: "Copy" })).toBeEnabled());
     await act(async () => {
       oldWrite.resolve(undefined);
       await oldWrite.promise;
     });
 
     // Then
-    expect(screen.getByRole("button", { name: "복사" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "복사됨" })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copied" })).not.toBeInTheDocument();
   });
 });

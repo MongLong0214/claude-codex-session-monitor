@@ -1,4 +1,20 @@
+.counterList {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  padding: var(--spacing-0-5);
+  background: var(--color-background-muted);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-element);
+  scrollbar-width: none;
+}
+
+.counterList::-webkit-scrollbar {
+  display: none;
+}
+
 .counterItem {
+  flex: none;
   list-style: none;
 }
 
@@ -6,18 +22,111 @@
   display: flex;
   align-items: center;
   gap: var(--spacing-1);
+  min-height: var(--size-element-sm);
+  padding: 0 var(--spacing-1-5);
+  color: var(--color-text-secondary);
+  white-space: nowrap;
   background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-element);
-  padding: 2px var(--spacing-1);
+  border: var(--border-width) solid transparent;
+  border-radius: var(--radius-inner);
   cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
 }
 
 .counterButton[aria-pressed="true"] {
-  background: var(--color-background-muted);
-  border-color: var(--color-border);
+  color: var(--color-text-primary);
+  background: var(--color-accent-muted);
+  border-color: var(--color-accent);
 }
 
 .counterButton:hover {
+  color: var(--color-text-primary);
+  background: var(--color-overlay-hover);
+}
+
+.counterButton:focus-visible {
+  outline: var(--spacing-0-5) solid var(--color-accent);
+  outline-offset: var(--spacing-0-5);
+}
+
+.counterValue {
+  min-width: 2ch;
+  color: var(--color-text-primary);
+  text-align: end;
+}
+
+.summaryItem {
+  display: flex;
+  align-items: center;
+  min-height: var(--size-element-sm);
+  margin-inline-start: var(--spacing-1);
+  padding-inline: var(--spacing-2);
+  border-inline-start: var(--border-width) solid var(--color-border-emphasized);
+}
+
+.summaryText {
+  white-space: nowrap;
+}
+
+.endControls {
+  min-width: 0;
+}
+
+.liveIndicator {
+  flex: none;
+  min-height: var(--size-element-sm);
+  padding-inline: var(--spacing-1-5);
   background: var(--color-background-muted);
+  border: var(--border-width) solid var(--color-border);
+  border-radius: var(--radius-full);
+}
+
+.connectionLabel,
+.syncTime {
+  white-space: nowrap;
+}
+
+.searchButton {
+  flex: none;
+}
+
+@media (max-width: 1024px) {
+  .summaryItem {
+    display: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .searchButton {
+    width: var(--size-element-sm);
+    padding-inline: 0;
+  }
+
+  .searchButton > span > span:last-child {
+    display: none;
+  }
+}
+
+@media (max-width: 480px) {
+  .endControls {
+    gap: var(--spacing-1);
+  }
+
+  .connectionLabel,
+  .syncTime {
+    display: none;
+  }
+
+  .liveIndicator {
+    padding-inline: var(--spacing-1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .counterButton {
+    transition: none;
+  }
 }

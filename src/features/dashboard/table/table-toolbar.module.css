@@ -15,3 +15,24 @@
 .densityControl button span {
   color: var(--color-text-primary);
 }
+
+@media (max-width: 768px) {
+  .toolbar {
+    padding-inline: var(--spacing-2);
+  }
+}
+.toolbar {
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  background: var(--color-background-surface);
+  scrollbar-width: none;
+}
+
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+.toolbar :global(.astryx-toolbar) {
+  min-width: max-content;
+}

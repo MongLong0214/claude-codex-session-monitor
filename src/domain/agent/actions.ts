@@ -42,7 +42,7 @@ export const BulkAgentActionRequestSchema = z.object({
     .array(AgentIdSchema)
     .min(1)
     .max(100)
-    .refine((agentIds) => new Set(agentIds).size === agentIds.length, { message: "에이전트 ID는 중복될 수 없습니다." }),
+    .refine((agentIds) => new Set(agentIds).size === agentIds.length, { message: "Agent IDs must be unique." }),
   action: AgentActionTypeSchema,
   force: z.boolean().optional(),
 });

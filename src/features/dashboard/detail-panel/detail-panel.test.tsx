@@ -56,7 +56,7 @@ beforeEach(() => {
     agentId: CODEX_AGENT_ID,
     action: "view_diff",
     status: "success",
-    message: "변경 사항이 없습니다.",
+    message: "No changes.",
   });
 });
 
@@ -69,17 +69,17 @@ describe("DetailPanel open/close", () => {
   it("AC: opening the panel with an agent id shows that agent's name and status", async () => {
     renderPanel(CODEX_AGENT_ID);
 
-    const panel = await screen.findByRole("complementary", { name: "에이전트 상세" });
-    expect(panel).toHaveTextContent("Codex Session Monitor 마이그레이션");
-    expect(panel).toHaveTextContent("실행 중");
+    const panel = await screen.findByRole("complementary", { name: "Agent details" });
+    expect(panel).toHaveTextContent("Migrate Codex Session Monitor");
+    expect(panel).toHaveTextContent("Running");
   });
 
   it("AC: the close button calls onClose", async () => {
     const user = userEvent.setup();
     const { onClose } = renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    await user.click(screen.getByRole("button", { name: "상세 패널 닫기" }));
+    await user.click(screen.getByRole("button", { name: "Close detail panel" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
@@ -91,7 +91,7 @@ describe("DetailPanel open/close", () => {
       return (
         <>
           <button ref={triggerRef} type="button">
-            상세 보기 트리거
+            Open details trigger
           </button>
           <DetailPanel agentId={CODEX_AGENT_ID} onClose={vi.fn()} restoreFocusRef={triggerRef} />
         </>
@@ -108,25 +108,25 @@ describe("DetailPanel open/close", () => {
       </ThemeProvider>,
     );
 
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
-    await user.click(screen.getByRole("button", { name: "상세 패널 닫기" }));
+    await screen.findByRole("complementary", { name: "Agent details" });
+    await user.click(screen.getByRole("button", { name: "Close detail panel" }));
 
-    expect(screen.getByRole("button", { name: "상세 보기 트리거" })).toHaveFocus();
+    expect(screen.getByRole("button", { name: "Open details trigger" })).toHaveFocus();
   });
 
   it("AC: without restoreFocusRef, closing still calls onClose and does not throw", async () => {
     const user = userEvent.setup();
     const { onClose } = renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    await user.click(screen.getByRole("button", { name: "상세 패널 닫기" }));
+    await user.click(screen.getByRole("button", { name: "Close detail panel" }));
     expect(onClose).toHaveBeenCalledOnce();
   });
 
   it("AC: pressing Escape closes the panel the same way the close button does", async () => {
     const user = userEvent.setup();
     const { onClose } = renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
     await user.keyboard("{Escape}");
     expect(onClose).toHaveBeenCalledOnce();
@@ -151,42 +151,43 @@ describe("DetailPanel loading/empty states", () => {
       </ThemeProvider>,
     );
 
-    expect(await screen.findByLabelText("에이전트를 불러오는 중")).toBeInTheDocument();
+    expect(await screen.findByLabelText("Loading agent")).toBeInTheDocument();
 
     resolveSnapshot(SNAPSHOT);
     await waitFor(() => {
-      expect(screen.queryByLabelText("에이전트를 불러오는 중")).not.toBeInTheDocument();
+      expect(screen.queryByLabelText("Loading agent")).not.toBeInTheDocument();
     });
   });
 
   it("AC: shows an empty state when the agent id is not present in the snapshot", async () => {
     renderPanel("does-not-exist");
 
-    expect(await screen.findByText("에이전트를 찾을 수 없습니다")).toBeInTheDocument();
-    expect(screen.queryByRole("navigation", { name: "에이전트 상세 탭" })).not.toBeInTheDocument();
+    expect(await screen.findByText("Agent not found")).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "Agent detail tabs" })).not.toBeInTheDocument();
   });
 });
 
 describe("DetailPanel tab switching", () => {
-  it("AC: opens on the 개요 tab by default and switches content when another tab is selected", async () => {
+  it("AC: opens on the Overview tab by default and switches content when another tab is selected", async () => {
     const user = userEvent.setup();
     renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
     // TabList renders as a <nav> of plain buttons (aria-current, not the ARIA tabs widget).
-    const tabs = screen.getByRole("navigation", { name: "에이전트 상세 탭" });
+    const tabs = screen.getByRole("navigation", { name: "Agent detail tabs" });
+    expect(screen.getByRole("region", { name: "Agent detail content" })).toHaveAttribute("tabindex", "0");
     expect(tabs).toBeInTheDocument();
     // Overview content: the metadata list's 상태 row is only rendered by OverviewTab.
-    expect(screen.getByText("마지막 신호")).toBeInTheDocument();
+    expect(screen.getByText("Last signal")).toBeInTheDocument();
 
-    await user.click(within(tabs).getByRole("button", { name: "로그" }));
+    await user.click(within(tabs).getByRole("button", { name: "Logs" }));
     await waitFor(() => {
-      expect(screen.getByRole("log", { name: "에이전트 활동 로그" })).toBeInTheDocument();
+      expect(screen.getByRole("log", { name: "Agent activity log" })).toBeInTheDocument();
     });
 
-    await user.click(within(tabs).getByRole("button", { name: "변경 사항" }));
+    await user.click(within(tabs).getByRole("button", { name: "Changes" }));
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "새로고침" })).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Refresh" })).toBeInTheDocument();
     });
     // ChangesTab fires view_diff on mount.
     await waitFor(() => {
@@ -197,12 +198,12 @@ describe("DetailPanel tab switching", () => {
   it("AC: Changes describes view_diff as a point-in-time git status --short working-tree result", async () => {
     const user = userEvent.setup();
     renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    const tabs = screen.getByRole("navigation", { name: "에이전트 상세 탭" });
-    await user.click(within(tabs).getByRole("button", { name: "변경 사항" }));
+    const tabs = screen.getByRole("navigation", { name: "Agent detail tabs" });
+    await user.click(within(tabs).getByRole("button", { name: "Changes" }));
 
-    expect(await screen.findByText(/작업 트리의 git status --short 결과/)).toHaveTextContent("조회 시점의 상태");
+    expect(await screen.findByText(/working tree output from git status --short/)).toHaveTextContent("point-in-time snapshot");
     expect(screen.queryByText(/git diff --stat/)).not.toBeInTheDocument();
   });
 });
@@ -210,48 +211,48 @@ describe("DetailPanel tab switching", () => {
 describe("DetailPanel disabled-action reasons", () => {
   it("AC: an agent with an observed runtime pid gets enabled process-signal actions", async () => {
     renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    expect(screen.getByRole("button", { name: "정지(SIGSTOP)" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "재개(SIGCONT)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Pause (SIGSTOP)" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Resume (SIGCONT)" })).toBeEnabled();
   });
 
   it("AC: a Claude-Code-sourced agent (never a runtime pid) renders process-signal actions disabled with a reason", async () => {
     renderPanel(CLAUDE_CODE_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    const pauseButton = screen.getByRole("button", { name: "정지(SIGSTOP)" });
-    const resumeButton = screen.getByRole("button", { name: "재개(SIGCONT)" });
+    const pauseButton = screen.getByRole("button", { name: "Pause (SIGSTOP)" });
+    const resumeButton = screen.getByRole("button", { name: "Resume (SIGCONT)" });
     // Button uses aria-disabled (not native disabled) so the reason stays reachable via tooltip.
     expect(pauseButton).toHaveAttribute("aria-disabled", "true");
     expect(resumeButton).toHaveAttribute("aria-disabled", "true");
 
     // stop/pause/resume all share the same reason text (rendered once per tooltip), so assert presence rather than uniqueness.
-    expect(screen.getAllByText("작업 디렉터리에서 실행 중인 Codex 프로세스를 찾지 못했습니다.").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("No running Codex process was found in the working directory.").length).toBeGreaterThan(0);
   });
 
   it("AC: retry/approve/reject always render disabled with the no-control-channel explanation", async () => {
     renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    expect(screen.getByRole("button", { name: "재시도" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("button", { name: "승인" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByRole("button", { name: "거부" })).toHaveAttribute("aria-disabled", "true");
-    expect(screen.getByText(/재시도 · 승인 · 거부는 항상 비활성입니다\./)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Retry" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Approve" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByRole("button", { name: "Reject" })).toHaveAttribute("aria-disabled", "true");
+    expect(screen.getByText(/Retry, Approve, and Reject are always unavailable\./)).toBeInTheDocument();
   });
 });
 
 describe("DetailPanel stop confirmation", () => {
-  it("AC: clicking 중지 opens a confirmation dialog, and Cancel closes it without sending the action", async () => {
+  it("AC: clicking Stop opens a confirmation dialog, and Cancel closes it without sending the action", async () => {
     const user = userEvent.setup();
     renderPanel(CODEX_AGENT_ID);
-    await screen.findByRole("complementary", { name: "에이전트 상세" });
+    await screen.findByRole("complementary", { name: "Agent details" });
 
-    await user.click(screen.getByRole("button", { name: "중지" }));
+    await user.click(screen.getByRole("button", { name: "Stop" }));
     const dialog = await screen.findByRole("alertdialog");
-    expect(dialog).toHaveTextContent("Codex Session Monitor 마이그레이션 중지");
+    expect(dialog).toHaveTextContent("Stop Migrate Codex Session Monitor?");
 
-    await user.click(screen.getByRole("button", { name: "취소" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     await waitFor(() => {
       expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument();
     });

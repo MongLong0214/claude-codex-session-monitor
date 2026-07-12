@@ -1,8 +1,9 @@
 "use client";
 
+import { Banner } from "@astryxdesign/core/Banner";
 import { Center } from "@astryxdesign/core/Center";
-import { Spinner } from "@astryxdesign/core/Spinner";
-import { Text } from "@astryxdesign/core/Text";
+import { Skeleton } from "@astryxdesign/core/Skeleton";
+import { HStack, VStack } from "@astryxdesign/core/Stack";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { AgentStatusKind } from "@/domain/agent/status";
 import type { Incident } from "@/domain/incident/incident";
@@ -18,6 +19,48 @@ import { SEARCH_INPUT_ID } from "./table/table-toolbar";
 interface DashboardRootProps {
   settings: DashboardSettings;
   onUpdateSettings: (patch: Partial<DashboardSettings>) => void;
+}
+
+const SKELETON_ROWS = Array.from({ length: 10 }, (_, index) => index);
+
+export function DashboardLoadingState({ label = "Loading dashboard" }: { label?: string }) {
+  return (
+    <VStack gap={0} height="100vh" role="status" aria-label={label} className="precisionSkeleton">
+      <HStack gap={3} vAlign="center" height={44} paddingInline={3} className="precisionSkeletonHeader">
+        <Skeleton width={220} height={20} radius={1} />
+        <Skeleton width="42%" height={24} radius={1} />
+        <Skeleton width={148} height={24} radius={1} />
+      </HStack>
+      <HStack gap={0} height="100%" vAlign="stretch" className="precisionSkeletonBody">
+        <VStack gap={3} width={256} padding={3} className="precisionSkeletonNav">
+          <Skeleton width={72} height={12} radius={1} />
+          <Skeleton width="100%" height={28} radius={1} />
+          <Skeleton width="100%" height={28} radius={1} />
+          <Skeleton width={64} height={12} radius={1} />
+          <Skeleton width="84%" height={28} radius={1} />
+          <Skeleton width="72%" height={28} radius={1} />
+          <Skeleton width="92%" height={28} radius={1} />
+        </VStack>
+        <VStack gap={0} width="100%" className="precisionSkeletonContent">
+          <HStack gap={2} vAlign="center" padding={3}>
+            <Skeleton width={260} height={28} radius={1} />
+            <Skeleton width={96} height={28} radius={1} />
+            <Skeleton width={96} height={28} radius={1} />
+            <Skeleton width={120} height={28} radius={1} />
+          </HStack>
+          {SKELETON_ROWS.map((row) => (
+            <HStack key={row} gap={3} vAlign="center" height={36} paddingInline={3}>
+              <Skeleton width={84} height={12} radius={1} />
+              <Skeleton width={180} height={12} radius={1} />
+              <Skeleton width={160} height={12} radius={1} />
+              <Skeleton width="36%" height={12} radius={1} />
+              <Skeleton width={96} height={12} radius={1} />
+            </HStack>
+          ))}
+        </VStack>
+      </HStack>
+    </VStack>
+  );
 }
 
 /** "/" focuses the table search — but not while the user is already typing into a field. */
@@ -68,7 +111,7 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
         return;
       }
       if (event.key === "/" && !event.metaKey && !event.ctrlKey && !event.altKey && !isEditableTarget(event.target)) {
-        const input = document.getElementById(SEARCH_INPUT_ID);
+        const input = document.querySelector(`[data-search-input-id="${SEARCH_INPUT_ID}"]`);
         if (input instanceof HTMLInputElement) {
           event.preventDefault();
           input.focus();
@@ -90,19 +133,19 @@ export function DashboardRoot({ settings, onUpdateSettings }: DashboardRootProps
   if (isError && !data) {
     return (
       <Center height="100vh">
-        <Text type="body">
-          대시보드를 불러오지 못했습니다: {error instanceof Error ? error.message : "알 수 없는 오류"}
-        </Text>
+        <VStack width="100%" maxWidth={600} padding={4}>
+          <Banner
+            status="error"
+            title="Dashboard unavailable"
+            description={error instanceof Error ? error.message : "An unknown error occurred."}
+          />
+        </VStack>
       </Center>
     );
   }
 
   if (isLoading || !data) {
-    return (
-      <Center height="100vh">
-        <Spinner size="lg" label="대시보드를 불러오는 중" />
-      </Center>
-    );
+    return <DashboardLoadingState />;
   }
 
   return (

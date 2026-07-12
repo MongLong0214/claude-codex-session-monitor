@@ -84,7 +84,7 @@ function CellContent({
   if (columnId === "select") {
     return (
       <CheckboxInput
-        label={`${agent.displayName} 선택`}
+        label={`Select ${agent.displayName}`}
         isLabelHidden
         size="sm"
         value={isSelected}
@@ -184,7 +184,7 @@ export const AgentTableRow = memo(function AgentTableRow({
         // The agent was removed between the id list being computed and this row rendering.
         <td role="cell" className={styles.td} style={{ width: "100%" }}>
           <Text type="supporting" color="disabled">
-            에이전트가 제거되었습니다
+            Agent removed
           </Text>
         </td>
       ) : (

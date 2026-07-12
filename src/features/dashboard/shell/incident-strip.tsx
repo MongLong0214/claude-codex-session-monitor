@@ -30,12 +30,12 @@ export function IncidentStrip({ incidents, onSelectIncident }: IncidentStripProp
       container="section"
       status={SEVERITY_TO_BANNER_STATUS[primary.severity]}
       title={primary.summary}
-      description={`${primary.evidence} · 권장 조치: ${primary.suggestedAction}`}
+      description={`${primary.evidence} · Recommended action: ${primary.suggestedAction}`}
       endContent={
-        <Button label="자세히 보기" variant="secondary" size="sm" onClick={() => onSelectIncident(primary)} />
+        <Button label="View details" variant="secondary" size="sm" onClick={() => onSelectIncident(primary)} />
       }
     >
-      {remaining > 0 ? <Text type="supporting">그 외 {remaining}건의 문제가 더 있습니다.</Text> : null}
+      {remaining > 0 ? <Text type="supporting">{remaining} more incidents require attention.</Text> : null}
     </Banner>
   );
 }

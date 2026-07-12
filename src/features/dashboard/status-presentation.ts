@@ -7,27 +7,27 @@ import type { ConnectionStatus } from "@/lib/realtime/transport";
  * accessibility guidance).
  */
 export const STATUS_DOT_VARIANT: Record<AgentStatusKind, "success" | "warning" | "error" | "accent" | "neutral"> = {
-  running: "accent",
-  waiting: "neutral",
+  running: "success",
+  waiting: "warning",
   approval_required: "warning",
   blocked: "warning",
   failed: "error",
-  completed: "success",
+  completed: "neutral",
   paused: "neutral",
   stale: "warning",
   offline: "neutral",
 };
 
 export const STATUS_LABEL: Record<AgentStatusKind, string> = {
-  running: "실행 중",
-  waiting: "대기 중",
-  approval_required: "승인 대기",
-  blocked: "차단됨",
-  failed: "실패",
-  completed: "완료",
-  paused: "일시정지",
-  stale: "응답 없음",
-  offline: "오프라인",
+  running: "Running",
+  waiting: "Waiting",
+  approval_required: "Approval required",
+  blocked: "Blocked",
+  failed: "Failed",
+  completed: "Completed",
+  paused: "Paused",
+  stale: "Stale",
+  offline: "Offline",
 };
 
 export const CONNECTION_DOT_VARIANT: Record<ConnectionStatus, "success" | "warning" | "error" | "accent" | "neutral"> =
@@ -36,13 +36,13 @@ export const CONNECTION_DOT_VARIANT: Record<ConnectionStatus, "success" | "warni
     open: "success",
     reconnecting: "warning",
     stale: "warning",
-    closed: "error",
+    closed: "neutral",
   };
 
 export const CONNECTION_LABEL: Record<ConnectionStatus, string> = {
-  connecting: "연결 중",
-  open: "연결됨",
-  reconnecting: "재연결 중",
-  stale: "응답 지연",
-  closed: "연결 끊김",
+  connecting: "Connecting",
+  open: "Live",
+  reconnecting: "Reconnecting",
+  stale: "Delayed",
+  closed: "Disconnected",
 };

@@ -1,5 +1,6 @@
 "use client";
 
+import { Layout, LayoutContent } from "@astryxdesign/core/Layout";
 import { ToastViewport } from "@astryxdesign/core/Toast";
 import { useCallback, useMemo, useState } from "react";
 import type { AgentId } from "@/domain/agent/agent";
@@ -43,8 +44,14 @@ export function DashboardWorkspace({
 
   return (
     <ToastViewport>
-      <OperationsTable tableState={tableState} onOpenDetail={setSelectedAgentId} />
-      <DetailPanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />
+      <Layout
+        height="fill"
+        end={<DetailPanel agentId={selectedAgentId} onClose={() => setSelectedAgentId(null)} />}
+      >
+        <LayoutContent isScrollable={false} label="Agent operations workspace">
+          <OperationsTable tableState={tableState} onOpenDetail={setSelectedAgentId} />
+        </LayoutContent>
+      </Layout>
       <DashboardCommandPalette
         isOpen={isCommandPaletteOpen}
         onOpenChange={onCommandPaletteOpenChange}

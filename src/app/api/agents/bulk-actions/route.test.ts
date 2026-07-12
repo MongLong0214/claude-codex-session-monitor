@@ -40,7 +40,7 @@ describe("POST /api/agents/bulk-actions", () => {
 
     // Then
     expect(response.status).toBe(415);
-    expect(await response.json()).toEqual({ error: expect.any(String) });
+    expect(await response.json()).toEqual({ error: "Content-Type must be application/json." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 
@@ -53,7 +53,7 @@ describe("POST /api/agents/bulk-actions", () => {
 
     // Then
     expect(response.status).toBe(413);
-    expect(await response.json()).toEqual({ error: expect.any(String) });
+    expect(await response.json()).toEqual({ error: "Request body is too large." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
   });
 
@@ -70,7 +70,7 @@ describe("POST /api/agents/bulk-actions", () => {
     expect(new TextEncoder().encode(requestBody).byteLength).toBeLessThanOrEqual(16 * 1024);
     expect(response.status).toBe(400);
     expect(new TextEncoder().encode(responseBody).byteLength).toBeLessThanOrEqual(256);
-    expect(JSON.parse(responseBody)).toEqual({ error: expect.any(String) });
+    expect(JSON.parse(responseBody)).toEqual({ error: "Invalid request body." });
     expect(repositories.getSnapshot).not.toHaveBeenCalled();
     expect(repositories.executeBulk).not.toHaveBeenCalled();
   });
@@ -89,11 +89,11 @@ describe("POST /api/agents/bulk-actions", () => {
     expect(repositories.executeBulk).toHaveBeenCalledWith(["known"], "pause", undefined);
     expect(await response.json()).toEqual({
       results: [
-        { agentId: "constructor", action: "pause", status: "skipped", message: expect.any(String) },
+        { agentId: "constructor", action: "pause", status: "skipped", message: "Agent is not registered." },
         { agentId: "known", action: "pause", status: "success", message: "paused" },
-        { agentId: "missing", action: "pause", status: "skipped", message: expect.any(String) },
-        { agentId: "toString", action: "pause", status: "skipped", message: expect.any(String) },
-        { agentId: "__proto__", action: "pause", status: "skipped", message: expect.any(String) },
+        { agentId: "missing", action: "pause", status: "skipped", message: "Agent is not registered." },
+        { agentId: "toString", action: "pause", status: "skipped", message: "Agent is not registered." },
+        { agentId: "__proto__", action: "pause", status: "skipped", message: "Agent is not registered." },
       ],
     });
   });

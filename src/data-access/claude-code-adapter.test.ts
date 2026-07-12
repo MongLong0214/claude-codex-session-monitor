@@ -211,25 +211,25 @@ describe("totalTokens", () => {
 
 describe("pickDisplayName", () => {
   it("prefers the ai-title when present", () => {
-    expect(pickDisplayName("멀티 에이전트 대시보드 마이그레이션", "raw first prompt text", false)).toBe(
-      "멀티 에이전트 대시보드 마이그레이션",
+    expect(pickDisplayName("Migrate the multi-agent dashboard", "raw first prompt text", false)).toBe(
+      "Migrate the multi-agent dashboard",
     );
   });
 
   it("falls back to the first user prompt when there is no ai-title", () => {
-    expect(pickDisplayName(null, "테스트를 추가해 주세요", false)).toBe("테스트를 추가해 주세요");
+    expect(pickDisplayName(null, "Please add tests", false)).toBe("Please add tests");
   });
 
   it("collapses whitespace and truncates a very long title", () => {
-    const long = "제목 ".repeat(200);
+    const long = "Title ".repeat(200);
     const name = pickDisplayName(long, null, false);
     expect(name.length).toBeLessThanOrEqual(120);
     expect(name.endsWith("…")).toBe(true);
   });
 
   it("uses a role-appropriate placeholder when nothing is available", () => {
-    expect(pickDisplayName(null, null, false)).toBe("이름 없는 메인 세션");
-    expect(pickDisplayName(null, null, true)).toBe("이름 없는 서브 에이전트");
+    expect(pickDisplayName(null, null, false)).toBe("Untitled main session");
+    expect(pickDisplayName(null, null, true)).toBe("Untitled subagent");
   });
 });
 
@@ -315,8 +315,8 @@ describe("collectClaudeCodeAgents", () => {
       expect(outcome).not.toBe("timed out");
       if (outcome !== "timed out") {
         expect(outcome.agents).toEqual([]);
-        expect(outcome.warnings.filter((warning) => warning.includes("일반 파일"))).toEqual([
-          expect.stringContaining("2개"),
+        expect(outcome.warnings.filter((warning) => warning.includes("non-regular session entries"))).toEqual([
+          expect.stringContaining("2"),
         ]);
       }
     },
@@ -342,7 +342,7 @@ describe("collectClaudeCodeAgents", () => {
     const result = await collectClaudeCodeAgents(NOW);
 
     expect(result.agents).toEqual([]);
-    expect(result.warnings.some((warning) => warning.includes("크기 제한"))).toBe(true);
+    expect(result.warnings.some((warning) => warning.includes("64 MiB limit"))).toBe(true);
   });
 
   it("skips an oversized sessions index with one honest warning", async () => {
@@ -355,7 +355,7 @@ describe("collectClaudeCodeAgents", () => {
     const result = await collectClaudeCodeAgents(NOW);
 
     expect(result.agents).toHaveLength(1);
-    expect(result.warnings.filter((warning) => warning.includes("인덱스"))).toHaveLength(1);
+    expect(result.warnings.filter((warning) => warning.includes("session index"))).toHaveLength(1);
   });
 
   it("promise-caches one malformed sessions-index read across concurrent scans", async () => {
@@ -368,7 +368,7 @@ describe("collectClaudeCodeAgents", () => {
     const result = await collectClaudeCodeAgents(NOW);
 
     expect(result.agents).toHaveLength(4);
-    expect(result.warnings.filter((warning) => warning.includes("인덱스"))).toHaveLength(1);
+    expect(result.warnings.filter((warning) => warning.includes("session index"))).toHaveLength(1);
   });
 
   it("parses indented JSON lines while still skipping malformed records", async () => {
@@ -399,7 +399,7 @@ describe("collectClaudeCodeAgents", () => {
 
     expect(result.agents.map((agent) => agent.id)).toEqual([`claude_code:${validRawId}`]);
     for (const agent of result.agents) AgentSchema.parse(agent);
-    expect(result.warnings.filter((warning) => warning.includes("ID 길이"))).toEqual([expect.stringContaining("1개")]);
+    expect(result.warnings.filter((warning) => warning.includes("ID lengths"))).toEqual([expect.stringContaining("1")]);
   });
 
   it("skips unsafe transcript counters with one bounded warning", async () => {
@@ -420,6 +420,6 @@ describe("collectClaudeCodeAgents", () => {
     const result = await collectClaudeCodeAgents(NOW);
 
     expect(result.agents).toEqual([]);
-    expect(result.warnings.filter((warning) => warning.includes("토큰"))).toHaveLength(1);
+    expect(result.warnings.filter((warning) => warning.includes("token usage"))).toHaveLength(1);
   });
 });

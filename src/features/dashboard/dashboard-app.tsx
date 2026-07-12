@@ -1,10 +1,8 @@
 "use client";
 
-import { Center } from "@astryxdesign/core/Center";
-import { Spinner } from "@astryxdesign/core/Spinner";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { usePersistedSettings } from "@/lib/settings/use-persisted-settings";
-import { DashboardRoot } from "./dashboard-root";
+import { DashboardLoadingState, DashboardRoot } from "./dashboard-root";
 
 /**
  * Owns the persisted settings for the whole dashboard and feeds them in two directions: down into
@@ -25,9 +23,7 @@ export function DashboardApp() {
       {isHydrated ? (
         <DashboardRoot settings={settings} onUpdateSettings={updateSettings} />
       ) : (
-        <Center height="100vh">
-          <Spinner size="lg" label="설정을 불러오는 중" />
-        </Center>
+        <DashboardLoadingState label="Loading settings" />
       )}
     </ThemeProvider>
   );

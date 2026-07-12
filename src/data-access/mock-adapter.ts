@@ -37,8 +37,8 @@ function repeatToLength(fragment: string, minLength: number): string {
 
 const PROJECT_MONITOR: ProjectRef = {
   cwd: "/Users/dev/WebstormProjects/codex-session-monitor",
-  name: "codex-session-monitor",
-  repoUrl: "git@github.com:example-user/codex-session-monitor.git",
+  name: "claude-codex-session-monitor",
+  repoUrl: "git@github.com:example-user/claude-codex-session-monitor.git",
 };
 
 const PROJECT_NEWSLETTER: ProjectRef = {
@@ -496,7 +496,7 @@ function fixtureSpecs(now: number): FixtureSpec[] {
       model: "gpt-5.6-sol",
       reasoningEffort: "medium",
       status: { kind: "waiting", since: at(11 * MINUTE_MS) },
-      currentTask: "gh pr create --fill 로 생성한 https://github.com/example-user/codex-session-monitor/pull/128 리뷰를 기다립니다.",
+      currentTask: "gh pr create --fill 로 생성한 https://github.com/example-user/claude-codex-session-monitor/pull/128 리뷰를 기다립니다.",
       tokensUsed: 27_640,
       costUsd: null,
       startedAtOffsetMs: 2 * HOUR_MS,
